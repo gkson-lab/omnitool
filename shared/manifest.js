@@ -18,6 +18,7 @@ window.OMNI_MANIFEST = [
 	'ai/agent.js',
 	'ai/agent-tools.js',
 	'ai/offline.js',
+	'ai/onyx-math.js',
 	'ai/onyx-data.js',
 	'ai/onyx.js',
 	'core/shell.js',

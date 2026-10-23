@@ -161,7 +161,7 @@
 	const memory = () => Object.assign({ name: null, facts: [], met: null }, Omni.store.get(MEMORY_KEY, {}));
 	const saveMemory = (m) => Omni.store.set(MEMORY_KEY, m);
 
-	const fresh = () => ({ pending: null, expect: null, lastIntent: null, lastReply: '', lastKind: null, lastCommand: null, why: null, recent: {}, bags: {}, misses: 0 });
+	const fresh = () => ({ lastAnswer: null, pending: null, expect: null, lastIntent: null, lastReply: '', lastKind: null, lastCommand: null, why: null, recent: {}, bags: {}, misses: 0 });
 	let convo = fresh();
 
 	const part = () => {
@@ -217,6 +217,39 @@
 		t = t.replace(/\bsquared\b/g, '^2').replace(/\bcubed\b/g, '^3').replace(/\bto the power of\b/g, '^').replace(/\bsquare root of\b/g, 'sqrt');
 		t = t.trim();
 		return /^[-+*/^().\d\s]+$|^sqrt[\s(]*[\d.]+\)?$/.test(t) && /[-+*/^]|sqrt/.test(t) ? t : null;
+	}
+
+	/** Small things Onyx does with words: count letters or words, reverse, spell, change case, numbers in words. */
+	function wordTrick(text) {
+		const q = (s) => s.trim().replace(/^["'“]|["'”.?!]$/g, '').trim();
+		let m;
+		if ((m = text.match(/^how many (?:letters|characters|chars) (?:are )?(?:in|does) (.+?)(?: have)?\??$/i))) {
+			const w = q(m[1]);
+			const letters = (w.match(/\p{L}/gu) || []).length;
+			return `"${w}" has ${letters} letter${letters === 1 ? '' : 's'}${letters !== w.length ? ` (${w.length} characters with spaces and symbols)` : ''}.`;
+		}
+		if ((m = text.match(/^how many (?:times (?:does|is) )?(?:the letter )?["']?(\p{L})["']? (?:appear )?(?:are )?in (.+?)\??$/iu)) && !/^(times|words?)$/i.test(m[1])) {
+			const n = (q(m[2]).toLowerCase().match(new RegExp(m[1].toLowerCase(), 'g')) || []).length;
+			return `"${m[1]}" appears ${n} time${n === 1 ? '' : 's'} in "${q(m[2])}".`;
+		}
+		if ((m = text.match(/^(?:count|how many) (?:the )?words (?:are )?in (.+)$/i))) {
+			const n = q(m[1]).split(/\s+/).filter(Boolean).length;
+			return `That's ${n} word${n === 1 ? '' : 's'}.`;
+		}
+		if ((m = text.match(/^(?:reverse|say|spell|write) (.+?) backwards?$/i)) || (m = text.match(/^reverse (.+)$/i))) return `${[...q(m[1])].reverse().join('')}`;
+		if ((m = text.match(/^(?:how do you )?spell (?:out )?(.+?)\??$/i)) && !/\d/.test(m[1])) return [...q(m[1]).toUpperCase()].filter((c) => c.trim()).join('-');
+		if ((m = text.match(/^(?:uppercase|upper case|capitali[sz]e|make uppercase) (.+)$/i))) return q(m[1]).toUpperCase();
+		if ((m = text.match(/^(?:lowercase|lower case|make lowercase) (.+)$/i))) return q(m[1]).toLowerCase();
+		if ((m = text.match(/^(?:title case) (.+)$/i))) return q(m[1]).toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+		if ((m = text.match(/^(?:write|say|spell|how do you (?:write|say)) (-?[\d,]+) (?:in|as) words\??$/i)) || (m = text.match(/^(-?[\d,]+) in words\??$/i))) {
+			const words = Omni.onyxMath && Omni.onyxMath.numberToWords(Number(m[1].replace(/,/g, '')));
+			return words ? `${m[1]} is "${words}".` : 'That number is too big for me to write out.';
+		}
+		if ((m = text.match(/^is (.+?) a palindrome\??$/i))) {
+			const w = q(m[1]).toLowerCase().replace(/[^\p{L}\d]/gu, '');
+			return w === [...w].reverse().join('') ? `Yes, "${q(m[1])}" reads the same backwards.` : `No, "${q(m[1])}" backwards is "${[...q(m[1])].reverse().join('')}".`;
+		}
+		return null;
 	}
 
 	/* ---------- Deciding the reply ---------- */
@@ -324,6 +357,15 @@ ${r.offer.ask}` : '');
 			const options = [decision[1], ...decision[2].split(/,\s*|\s+or\s+/)].map((s) => s.trim()).filter(Boolean);
 			const choice = options[Math.floor(Math.random() * options.length)];
 			return withGreet(answer(`Go with **${choice}**. I picked at random, so if your stomach disagrees, listen to it.`));
+		}
+		const word = wordTrick(body);
+		if (word) return withGreet(answer(word));
+		// Arithmetic is answered directly, and the answer is kept so "times 3" or "that squared" can follow.
+		const sum = Omni.onyxMath && Omni.onyxMath.answer(body, convo.lastAnswer);
+		if (sum) {
+			if (sum.value != null) convo.lastAnswer = sum.value;
+			convo.lastKind = null;
+			return withGreet(answer(sum.text));
 		}
 		const pickNum = body.match(/\bpick (?:a|one) number (?:between|from) (-?\d+) (?:and|to) (-?\d+)/i);
 		const math = wordsToMath(body);

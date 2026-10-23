@@ -133,10 +133,12 @@ Claude never touches your files directly. It can only ask for one of the agent's
 - **Talks**: greetings, how you're doing, jokes, tips, a few facts. It remembers your name, and anything you say "remember that..." about, on this device only; "forget me" clears it.
 - **Answers OmniTool questions**: "how do I add an API key", "is my data private", "keyboard shortcuts", and short definitions like "what is a JWT".
 - **Finds tools**: "I need to pretty print some JSON" offers the JSON formatter.
-- **Runs commands**: "generate 10 uuids and save them to a file", "convert 72 F to C", "what is 12 times 7", "roll 2d6". It asks before saving anything.
+- **Does math itself**: "what is 12 times 7", then "times 3" or "what's that squared"; numbers in words ("twelve plus nine"), "15% of 80", "is 97 prime", factors, averages, square roots, rounding, times tables.
+- **Word tricks**: "how many letters in banana", "reverse hello", "spell onyx", "write 1234 in words", "is racecar a palindrome".
+- **Runs commands**: "generate 10 uuids and save them to a file", "convert 72 F to C", "roll 2d6". It asks before saving anything.
 - **Can't**: write essays or code, look things up online, or answer general knowledge questions. It says so instead of guessing.
 
-Under the hood it's an intent model (TF-IDF over 573 example phrases for 55 intents, typo-tolerant), with conversation state for follow-ups like "another one" and "yes". On 84 phrasings it was never shown, it picks the right intent 96.4% of the time. The standalone engine is published as [Onyx 1](https://github.com/gkson-lab/onyx).
+Under the hood it's an intent model (TF-IDF over 658 example phrases for 68 intents, typo-tolerant), with conversation state for follow-ups like "another one" and "yes". On 84 phrasings it was never shown, it picks the right intent 95.2% of the time. The standalone engine is published as [Onyx 1](https://github.com/gkson-lab/onyx).
 
 ### LabsCode inside a tab
 
@@ -209,7 +211,7 @@ The tests drive the real app through the Chrome DevTools Protocol and need only 
 | `node tests/click-all.js` | Clicks every button of every web tool and gives every file input a real image |
 | `node tests/desktop-deep.js` | The native side: processes, DNS, ping, git, scripts, the agent's file limits, the file server, clipboard, screen capture, LabsCode bridge |
 | `node tests/agent-mock.js web` (or `desktop`) | Claude mode against a local stand-in for the API, with no key and no network |
-| `node tests/onyx.js` | Onyx: intent accuracy on 84 held-out phrasings, a 32-step conversation, the agent panel, and zero network requests |
+| `node tests/onyx.js` | Onyx: intent accuracy on 84 held-out phrasings, a 34-step conversation with math follow-ups, the agent panel, and zero network requests |
 | `node tests/motion.js` | Every animation fires and finishes, nothing loops on an idle screen, and reduced motion turns it all off |
 
 The latest results, tool by tool, are in [FEATURES.md](FEATURES.md#test-log).

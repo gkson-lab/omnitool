@@ -1,5 +1,11 @@
 # Changelog
 
+## OmniTool 1.2 (2026-10-22)
+
+- **Onyx does math itself**: digits or number words, the four operations, powers, roots, factorials and parentheses, percentages, primes, factors, greatest common divisor and least common multiple, averages, sums, rounding, times tables and counting. Follow-ups use the last answer ("times 3", "what's that squared"). A small parser of its own works the answer out; nothing is run as code.
+- **A bigger vocabulary**: 68 intents (from 55) and 658 example phrases (from 573), with small talk about food, coffee, music, sleep, weekends, work, hobbies and birthdays, plus "how do you work", "can you learn" and "what can't you do". The glossary grew to 76 terms, with 30 jokes and 27 facts.
+- **Word tricks**: count letters or words, count a letter, reverse, spell out, change case, check palindromes, and write numbers in words.
+
 ## OmniTool 1.1 (2026-10-22)
 
 - **Omni Agent - Onyx.** Omni Agent has its own engine that runs on your device with no internet, no account and no download. It replaces the old offline mode: it holds a simple conversation, remembers your name and what you ask it to keep (on this device only), answers questions about OmniTool, defines common developer terms, finds the right tool from a description, and runs the same commands as before. A switch in the agent panel picks Onyx or Claude. Measured: 96.4% intent accuracy on 84 phrasings it was not built with, zero network requests. The standalone engine is published as [Onyx 1](https://github.com/gkson-lab/onyx).
