@@ -14,7 +14,7 @@
 		const drawStatus = async () => {
 			const k = await Omni.ai.key();
 			status.replaceChildren(
-				k ? h('span', null, h('strong', null, 'Claude is on. '), `Key ending in ${k.slice(-4)}, stored in ${Omni.secrets.where()}.`) : h('span', null, h('strong', null, 'Offline mode. '), 'Omni Agent and the AI tools use their limited offline versions until you add a key.'),
+				k ? h('span', null, h('strong', null, 'Claude is on. '), `Key ending in ${k.slice(-4)}, stored in ${Omni.secrets.where()}.`) : h('span', null, h('strong', null, 'Onyx is on. '), 'Omni Agent uses Onyx, its local engine, and the AI tools use their limited offline versions until you add a key.'),
 			);
 		};
 		const keyInput = h('input', { type: 'password', id: 'ai-key', autocomplete: 'off', spellcheck: 'false', placeholder: hasKey ? 'A key is saved. Paste a new one to replace it.' : 'sk-ant-...', 'aria-describedby': 'ai-key-hint' });
@@ -34,7 +34,7 @@
 			Omni.ui.toast('API key saved.');
 		};
 		const clear = async () => {
-			const ok = await Omni.ui.confirm({ title: 'Remove the API key?', body: 'Omni Agent and the AI tools go back to offline mode.', confirmLabel: 'Remove key', focusCancel: true });
+			const ok = await Omni.ui.confirm({ title: 'Remove the API key?', body: 'Omni Agent goes back to Onyx, and the AI tools to their offline versions.', confirmLabel: 'Remove key', focusCancel: true });
 			if (!ok) return;
 			await Omni.secrets.clear('anthropic');
 			keyInput.placeholder = 'sk-ant-...';

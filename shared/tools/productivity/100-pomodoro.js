@@ -4,6 +4,10 @@
 
 	/** Short beep and a system notification (when allowed), shared by the timers. */
 	Omni.alarm = {
+		/** Pulses a timer readout three times once the page has redrawn it. */
+		flash(selector) {
+			setTimeout(() => Omni.motion.nudge(document.querySelector(selector), 'alarm'), 80);
+		},
 		beep(times) {
 			try {
 				const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -65,6 +69,7 @@
 			Omni.store.set(KEY, advance(s));
 			Omni.alarm.notify('Pomodoro', was === 'work' ? `Focus session done. Time for a ${s.phase === 'long' ? 'long' : 'short'} break.` : 'Break over. Ready for the next focus session.');
 			Omni.emit('pomodoro');
+			Omni.alarm.flash('#main [role="timer"]');
 		}
 	}, 1000);
 

@@ -192,7 +192,7 @@ Each works with an Anthropic API key; without one each has a labeled offline mod
 
 | No. | Tool | D | W | What it does | Status |
 |---|---|---|---|---|---|
-| 137 | Omni Agent | yes | yes | Chat assistant that calls OmniTool's tools and shows each step. Desktop: reads and edits the open LabsCode file and writes files after asking. Offline: rule-based commands | pass: flow, native, Claude stand-in |
+| 137 | Omni Agent (Onyx and Claude) | yes | yes | Chat and tool automation. Onyx runs on the device (conversation, OmniTool help, tool finding, commands, memory); Claude takes over with an API key. Shows each step and asks before any file write or delete | pass: flow, native, Claude stand-in |
 | 138 | Code explainer | yes | yes | Explains code. Offline: an outline of imports, functions, classes and complexity | pass: ran, Claude stand-in |
 | 139 | Bug finder | yes | yes | Reviews code for bugs. Offline: lint plus common-mistake checks | pass: ran |
 | 140 | Doc comment writer | yes | yes | Writes JSDoc or docstrings. Offline: comment skeletons from signatures | pass: ran |
@@ -238,7 +238,7 @@ The web edition has 133 of the 150 tools. These 17 need the desktop app because 
 
 ## Test log
 
-Final runs on 2026-10-22 on Windows 11 (build 26200): headless Chrome for the web edition, Electron 44.6.0 for the desktop edition. Each run writes its raw results to `tests/report-*.json` (not committed).
+Final runs on 2026-10-22, after the motion and Onyx work, on Windows 11 (build 26200): headless Chrome for the web edition, Electron 44.6.0 for the desktop edition. Each run writes its raw results to `tests/report-*.json` (not committed).
 
 | What | Command | Result |
 |---|---|---|
@@ -247,6 +247,8 @@ Final runs on 2026-10-22 on Windows 11 (build 26200): headless Chrome for the we
 | Every button (web) | `node tests/click-all.js` | 739 buttons clicked across all 133 tools, each followed by Escape, with 0 page errors. A PNG was given to the 7 tools with file inputs: 6 produced their result (data URI, WebP conversion, checksums, favicons, dominant colors, ASCII art) and Code Pad refused it as a binary file. |
 | Native features (desktop) | `node tests/desktop-deep.js` | 16 of 16 checks passed: system info, the PID 4 guard, DNS and ports, ping and traceroute, a rejected injected host name, git, Python, Node and PowerShell scripts (with a timeout), the agent's file access and its folder limits, writing without a dialog refused, the file server (a traversal attempt got 403), HTTP, rename and scaffold, clipboard history, screen capture, folder size, and the LabsCode bridge (an edit applied, a stale edit refused). |
 | Claude mode | `node tests/agent-mock.js web` and `desktop` | 16 of 16 checks passed in each edition against the local stand-in for the Claude API: "generate 10 UUIDs and save them to a file" ran the ID generator, sent its result back, stopped for approval and saved the 10 UUIDs; a rejected save was not written and Claude was told; the code explainer streamed its answer; model, effort, refusal fallback and streamed tool input were in every request. |
+| Motion (web) | `node tests/motion.js` | 14 of 14: nothing loops on an idle catalog or tool page; the catalog-to-tool view transition runs and leaves no names behind; page parts enter in order and finish; the sidebar marker, theme-switch thumb and palette selection land on their targets; changed readings roll; copy confirms and reverts; the tool bar pins on a long page; two coin flips scramble before settling; 2048 tiles slide; Minesweeper opens in rings; toasts count down and leave; Escape plays the dialog exit; with reduced motion on, nothing animates. |
+| Onyx | `node tests/onyx.js` | 39 of 39: 96.4% intent accuracy on 84 phrasings not in its examples; a 32-step conversation (name memory, follow-ups, offers, glossary, tool finder, commands, typos, honest refusals, the crisis reply, forgetting); Onyx is the engine without a key and runs a command with steps in the panel; 0 network requests; 0 page errors. |
 | Desktop setup | `desktop\start.bat --no-launch` | On this install: exit 0, "LabsCode is ready". Earlier in the build, on a copy with no Node.js on PATH: Node.js 24.21.0 downloaded and checked against its SHA-256, packages and Electron installed, LabsCode downloaded (384 MB), unpacked and set up. |
 
 The flows: command palette (Ctrl+K, a number search, Enter), catalog search ("uuid" finds the ID generator first; nonsense shows the empty state), pin and recent, the three themes, the offline agent (a two-step task with an approved save, an unknown request answered honestly, a unit conversion), to-do, notes, kanban, calendar, stopwatch and pomodoro, 2048, minesweeper and snake, saving and removing an API key (a fake key sent to the real API is rejected with the friendly message), Code Pad, and the phone menu.

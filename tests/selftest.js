@@ -13,6 +13,8 @@ const { Cdp } = require('./cdp');
 const { closeDesktopWindow } = require('./close-window');
 
 const edition = process.argv[2] || 'web';
+// --flow=a,b runs only those flows (no tool passes) and writes its report to report-<edition>-flows.json.
+const only = (process.argv.find((a) => a.startsWith('--flow=')) || '').slice(7).split(',').filter(Boolean);
 const root = path.resolve(__dirname, '..');
 const shots = path.join(__dirname, 'shots');
 fs.mkdirSync(shots, { recursive: true });
@@ -166,15 +168,17 @@ const FLOWS = {
 		Omni.toggleAgent(false);
 		return 'offline agent ran steps [' + steps.join(', ') + ']; approval "' + title + '" -> ' + status + '; messages ' + before + ' -> ' + after;
 	}`,
-	agent_unknown: `async () => {
+	agent_chat: `async () => {
 		const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 		Omni.toggleAgent(true);
 		Omni.agent.ask('what is the meaning of life');
-		await sleep(600);
-		const last = [...document.querySelectorAll('.agent-log .msg')].pop().textContent;
+		await sleep(900);
+		const msg = [...document.querySelectorAll('.agent-log .msg')].pop();
+		const who = msg.querySelector('.msg-who').textContent;
+		const last = msg.querySelector('.msg-body').textContent.trim();
 		Omni.toggleAgent(false);
-		if (!/offline mode could not/i.test(last)) throw new Error('Unexpected reply: ' + last.slice(0, 200));
-		return 'unknown command answered honestly: ' + last.replace(/\\s+/g, ' ').slice(14, 120);
+		if (who !== 'Onyx' || !/42/.test(last)) throw new Error('Unexpected reply from ' + who + ': ' + last.slice(0, 200));
+		return 'Onyx answered a non-command conversationally: ' + last.slice(0, 90);
 	}`,
 	agent_convert: `async () => {
 		const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -318,10 +322,21 @@ const FLOWS = {
 			test = (document.querySelector('#main [aria-live=polite] .state') || {}).textContent || '';
 		}
 		[...document.querySelectorAll('#main button')].find((b) => b.textContent === 'Remove key').click();
-		await sleep(200);
-		document.querySelector('dialog[open] .btn-primary').click();
-		await sleep(300);
-		return 'saved key -> mode ' + mode + ' (' + status.slice(0, 50) + '); test with a fake key: ' + test.replace(/\\s+/g, ' ').slice(0, 140) + '; removed -> ' + (await Omni.ai.mode());
+		let dlg = null;
+		for (let i = 0; i < 40 && !dlg; i++) {
+			await sleep(50);
+			dlg = document.querySelector('dialog[open]');
+		}
+		if (!dlg) throw new Error('The remove-key confirmation did not open');
+		dlg.querySelector('.btn-primary').click();
+		// The fake key must really be gone, or it would be left in the settings of whoever ran the test.
+		let after = 'claude';
+		for (let i = 0; i < 40 && after === 'claude'; i++) {
+			await sleep(100);
+			after = await Omni.ai.mode();
+		}
+		if (after === 'claude') throw new Error('The test key was not removed');
+		return 'saved key -> mode ' + mode + ' (' + status.slice(0, 50) + '); test with a fake key: ' + test.replace(/\\s+/g, ' ').slice(0, 140) + '; removed -> ' + after;
 	}`,
 	codepad: `async () => {
 		const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -384,7 +399,7 @@ async function main() {
 			{ name: 'phone-light', width: 375, height: 812, mobile: true, theme: 'light', run: false },
 			{ name: 'tablet-dark', width: 820, height: 1100, mobile: false, theme: 'dark', run: false },
 		];
-		for (const pass of passes) {
+		for (const pass of only.length ? [] : passes) {
 			await cdp.send('Emulation.setDeviceMetricsOverride', { width: pass.width, height: pass.height, deviceScaleFactor: 1, mobile: pass.mobile });
 			await cdp.eval(`Omni.store.set('theme', '${pass.theme}'); document.documentElement.setAttribute('data-theme', '${pass.theme}'); Omni.emit('theme', '${pass.theme}'); true`);
 			const results = [];
@@ -402,11 +417,11 @@ async function main() {
 		}
 		await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 860, deviceScaleFactor: 1, mobile: false });
 		await cdp.eval(`Omni.store.set('theme', 'system'); document.documentElement.removeAttribute('data-theme'); true`);
-		for (const [name, fn] of Object.entries(FLOWS)) {
+		for (const [name, fn] of Object.entries(FLOWS).filter(([n]) => !only.length || only.includes(n))) {
 			report.flows[name] = await cdp.eval(`(${fn})()`, 60000).then((v) => ({ ok: true, detail: v }), (err) => ({ ok: false, detail: err.message }));
 		}
 		await cdp.send('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
-		report.flows.mobile_menu_phone = await cdp.eval(`(${FLOWS.mobile_menu})()`).then((v) => ({ ok: true, detail: v }), (err) => ({ ok: false, detail: err.message }));
+		if (!only.length || only.includes('mobile_menu')) report.flows.mobile_menu_phone = await cdp.eval(`(${FLOWS.mobile_menu})()`).then((v) => ({ ok: true, detail: v }), (err) => ({ ok: false, detail: err.message }));
 	} finally {
 		if (cdp) {
 			if (edition === 'desktop') closeDesktopWindow(exe);
@@ -417,7 +432,7 @@ async function main() {
 		if (child.exitCode === null) child.kill();
 	}
 
-	fs.writeFileSync(path.join(__dirname, `report-${edition}.json`), JSON.stringify(report, null, 2));
+	fs.writeFileSync(path.join(__dirname, `report-${edition}${only.length ? '-flows' : ''}.json`), JSON.stringify(report, null, 2));
 	const problems = [];
 	for (const [name, results] of Object.entries(report.passes)) {
 		for (const r of results) {

@@ -8,3 +8,5 @@ desktop/data/
 tests/shots/
 tests/downloads/
 tests/report-*.json
+# Anything private (passwords, keys, notes) goes here and is never committed.
+private/

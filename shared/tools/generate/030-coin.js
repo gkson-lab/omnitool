@@ -4,6 +4,7 @@ Omni.register({
 	id: 'coin',
 	name: 'Coin flipper',
 	category: 'generate',
+	chance: (text) => (/^(Heads|Tails)$/.test(text) ? (Math.random() < 0.5 ? 'Heads' : 'Tails') : text.replace(/\d/g, () => String(Math.floor(Math.random() * 10)))),
 	keywords: ['coin', 'flip', 'heads', 'tails', 'toss', 'random'],
 	description: 'Flips one coin or thousands, with heads and tails counts and the longest streak.',
 	action: 'Flip',

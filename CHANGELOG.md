@@ -1,5 +1,12 @@
 # Changelog
 
+## OmniTool 1.1 (2026-10-22)
+
+- **Omni Agent - Onyx.** Omni Agent has its own engine that runs on your device with no internet, no account and no download. It replaces the old offline mode: it holds a simple conversation, remembers your name and what you ask it to keep (on this device only), answers questions about OmniTool, defines common developer terms, finds the right tool from a description, and runs the same commands as before. A switch in the agent panel picks Onyx or Claude. Measured: 96.4% intent accuracy on 84 phrasings it was not built with, zero network requests. The standalone engine is published as [Onyx 1](https://github.com/gkson-lab/onyx).
+- **The commands got guards.** "I forgot my password" no longer generates a password, "rock and roll" no longer rolls dice, and "I have problems at work" no longer runs the bug finder: each command now needs an actual request.
+- **Much more motion (MOTION 3 in DESIGN.md).** The catalog row morphs into the tool page, pages arrive in reading order, markers and switches slide, changed values roll, fresh results get an ink sweep, random draws scramble before settling, 2048 tiles slide and merge, Minesweeper opens outward from your click, the theme spreads from the switch, toasts show how long they stay, and long pages pin a slim bar with the tool's name. Every motion has a written purpose, nothing loops on an idle screen, and reduced motion turns it all off. `tests/motion.js` checks all of that.
+- **Fixed:** the page builder's style helper silently ignored CSS custom properties.
+
 ## OmniTool 1.0 (2026-10-22)
 
 First release.

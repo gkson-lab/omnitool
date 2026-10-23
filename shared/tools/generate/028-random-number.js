@@ -4,6 +4,7 @@ Omni.register({
 	id: 'random-number',
 	name: 'Random number generator',
 	category: 'generate',
+	chance: true,
 	keywords: ['random', 'number', 'rng', 'integer', 'seed', 'normal', 'gaussian', 'distribution'],
 	description: 'Random integers or decimals from uniform, normal, exponential or Poisson distributions. Add a seed to get the same numbers again.',
 	action: 'Generate',

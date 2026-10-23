@@ -1,6 +1,7 @@
 // Every shared script in load order; loader.js reads this. Tools are one file each, numbered as in FEATURES.md.
 window.OMNI_MANIFEST = [
 	'core/omni.js',
+	'core/motion.js',
 	'core/fuzzy.js',
 	'core/forms.js',
 	'lib/mathexpr.js',
@@ -17,6 +18,8 @@ window.OMNI_MANIFEST = [
 	'ai/agent.js',
 	'ai/agent-tools.js',
 	'ai/offline.js',
+	'ai/onyx-data.js',
+	'ai/onyx.js',
 	'core/shell.js',
 	'core/settings.js',
 	'tools/code/001-labscode.js',

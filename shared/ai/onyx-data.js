@@ -1,0 +1,227 @@
+// What Onyx knows: intents (example phrases and replies), jokes, tips, facts and a glossary tied to OmniTool's tools.
+// Replies are strings or functions of the conversation context; {name} becomes ", Sam" once Onyx knows your name.
+(function () {
+	'use strict';
+
+	const tool = (id) => Omni.byId[id];
+	const toolLink = (id) => (tool(id) ? `**${tool(id).name}** (No. ${tool(id).code})` : null);
+	const openOffer = (id, say) => (tool(id) ? { text: say, offer: { kind: 'open', id, ask: 'Want me to open it?' } } : null);
+
+	const JOKES = [
+		'Why do programmers prefer dark mode? Because light attracts bugs.',
+		'There are 10 kinds of people: those who understand binary and those who don\'t.',
+		'A SQL query walks into a bar, goes up to two tables and asks: "May I join you?"',
+		'I\'d tell you a UDP joke, but you might not get it.',
+		'How many programmers does it take to change a light bulb? None. That\'s a hardware problem.',
+		'To understand recursion, you first have to understand recursion.',
+		'Why did the developer go broke? They used up all their cache.',
+		'My code doesn\'t work and I don\'t know why. My code works and I don\'t know why.',
+		'There\'s no place like 127.0.0.1.',
+		'Why don\'t keyboards ever sleep? They have two shifts.',
+		'I\'d tell you a joke about the cloud, but I run offline.',
+		'The two hardest problems in computing: naming things, cache invalidation, and off-by-one errors.',
+		'Why was the function so calm? It had no side effects.',
+		'What do you call four bits? A nibble. That one isn\'t a joke, it\'s the real name.',
+		'I tried to write a joke about UUIDs, but every one came out unique.',
+		'Debugging is being the detective in a crime story where you are also the culprit.',
+		'Why did JSON leave XML? It wanted fewer tags and more space.',
+		'"Some people, when confronted with a problem, think: I know, I\'ll use regular expressions. Now they have two problems." That one is Jamie Zawinski\'s.',
+		'The Pomodoro timer is the most productive thing on this computer. It works 25 minutes, takes a break, and never feels guilty about it.',
+		'I asked Minesweeper for life advice. It said: take it one square at a time, and never guess on the first click.',
+	];
+
+	const TIPS = [
+		'Ctrl+K opens the palette from anywhere. Type a number like `44` to jump straight to No. 044.',
+		'Start a palette search with `?` to send it to me instead.',
+		'Ctrl+Enter runs the tool you\'re on, even from inside a text box.',
+		'Pin a tool from its page and it heads the catalog and the sidebar.',
+		'Settings > Your data exports everything except an API key as JSON, so you can move it to another machine or to the other edition.',
+		'Most tools remember your last inputs, so you can pick up where you left off.',
+		'Every result has a Copy button next to it, and tables copy as CSV.',
+		'Ctrl+J opens and closes this panel.',
+		'The theme switch at the bottom of the sidebar follows your system unless you pick Light or Dark. You can also just ask me: "dark mode".',
+		'Escape closes the palette, dialogs and the floating agent panel.',
+		'On a narrow window or a phone, the sidebar lives behind the Tools button at the top.',
+		'I can chain commands: "generate 5 uuids and save them to a file" runs the ID generator, then asks before saving.',
+	];
+
+	const FACTS = [
+		'The first recorded computer bug was an actual moth, found in a relay of the Harvard Mark II in 1947.',
+		'A nibble is four bits, half a byte. The name really is a pun on "byte".',
+		'One byte holds 256 values, 0 to 255. That top value is FF in hex.',
+		'Unix time counts the seconds since midnight UTC on 1 January 1970.',
+		'Systems that keep Unix time in a signed 32-bit number run out at 03:14:07 UTC on 19 January 2038.',
+		'A random (version 4) UUID has 122 random bits. You would need about 2.7 quintillion of them for even odds of one duplicate.',
+		'Base64 makes data about a third bigger: every 3 bytes become 4 characters.',
+		'Ray Tomlinson picked the @ sign for email addresses in 1971.',
+		'The first website went online at CERN in 1991, and you can still visit it at info.cern.ch.',
+		'Pomodoro is Italian for tomato. Francesco Cirillo named the technique after his tomato-shaped kitchen timer.',
+		'Minesweeper first shipped with Windows in Windows 3.1, in 1992.',
+		'Gabriele Cirulli made 2048 over a weekend in 2014.',
+		'Lorem ipsum is scrambled Latin from Cicero\'s "De finibus bonorum et malorum", written in 45 BC.',
+		'Roman numerals have no symbol for zero.',
+		'SOS in Morse code is `... --- ...`: three dots, three dashes, three dots.',
+		'The QWERTY layout comes from typewriters of the 1870s.',
+		'Snake games go back to Blockade, an arcade game from 1976.',
+	];
+
+	/* Short, accurate definitions of things OmniTool works with. `tool` is the tool to offer afterwards. */
+	const GLOSSARY = [
+		{ terms: ['uuid', 'uuids', 'guid', 'guids'], tool: 'id-generator', text: 'A UUID is a 128-bit identifier written as 32 hex digits in five groups, like `123e4567-e89b-42d3-a456-426614174000`. Version 4 is random; version 7 starts with a timestamp, so newer ones sort later.' },
+		{ terms: ['ulid', 'ulids'], tool: 'id-generator', text: 'A ULID is a 128-bit ID written as 26 characters (Crockford base32) that starts with a timestamp, so ULIDs sort by creation time.' },
+		{ terms: ['nano id', 'nanoid'], tool: 'id-generator', text: 'A Nano ID is a short random ID from a URL-safe alphabet, 21 characters by default.' },
+		{ terms: ['json'], tool: 'json-formatter', text: 'JSON is a text format for data: objects in `{}`, arrays in `[]`, strings in double quotes, plus numbers, `true`, `false` and `null`.' },
+		{ terms: ['yaml'], tool: 'yaml-json', text: 'YAML is a data format that uses indentation instead of brackets. It\'s common for config files.' },
+		{ terms: ['xml'], tool: 'xml-formatter', text: 'XML is a markup format of nested tags, like `<item id="1">text</item>`. Every opened tag has to close.' },
+		{ terms: ['csv'], tool: 'csv-json', text: 'CSV is comma-separated values: one record per line, fields separated by commas, quotes around fields that contain commas.' },
+		{ terms: ['markdown'], tool: 'markdown', text: 'Markdown is plain text with light formatting: `# heading`, `**bold**`, `- lists`, and `[links](url)`.' },
+		{ terms: ['regex', 'regexes', 'regular expression', 'regular expressions', 'regexp'], tool: 'regex-tester', text: 'A regular expression is a pattern for matching text. `\\d{3}` means three digits, `^` is the start of a line, `.*` is "anything".' },
+		{ terms: ['hash', 'hashing', 'hash function', 'sha256', 'sha 256', 'sha-256', 'md5', 'sha1', 'sha-1'], tool: 'hash', text: 'A hash turns any input into a fixed-size fingerprint. The same input always gives the same hash, and you can\'t get the input back. SHA-256 gives 64 hex digits; MD5 is older and broken for security, but still fine as a checksum.' },
+		{ terms: ['hmac'], tool: 'hmac', text: 'An HMAC is a hash mixed with a secret key. Anyone with the key can check that a message wasn\'t changed.' },
+		{ terms: ['checksum', 'checksums'], tool: 'checksum', text: 'A checksum is a hash of a file, used to check it downloaded intact: if your hash matches the published one, the file is the same.' },
+		{ terms: ['base64', 'base 64'], tool: 'base64', text: 'Base64 writes any data with 64 safe characters (A to Z, a to z, 0 to 9, + and /). The result is about a third bigger than the original.' },
+		{ terms: ['url encoding', 'percent encoding', 'url encode'], tool: 'url-encoder', text: 'URL encoding replaces characters that aren\'t allowed in a URL with `%` and their byte in hex, so a space becomes `%20`.' },
+		{ terms: ['jwt', 'jwts', 'json web token'], tool: 'jwt-decoder', text: 'A JWT (JSON Web Token) is three base64url parts joined by dots: a header, a payload of claims, and a signature. Anyone can read the payload; only the signature proves who made it.' },
+		{ terms: ['cron', 'cron expression', 'crontab'], tool: 'cron-explainer', text: 'A cron schedule has five fields: minute, hour, day of month, month, day of week. `0 9 * * 1` means 9:00 every Monday.' },
+		{ terms: ['semver', 'semantic versioning'], tool: 'semver', text: 'Semantic versioning is MAJOR.MINOR.PATCH: breaking changes bump the major number, new features the minor, fixes the patch.' },
+		{ terms: ['chmod', 'file permissions', 'unix permissions'], tool: 'chmod', text: '`chmod` sets who can read, write and run a file. `755` means the owner can do everything, everyone else can read and run.' },
+		{ terms: ['hex', 'hexadecimal'], tool: 'base-converter', text: 'Hexadecimal is base 16, written with 0 to 9 and A to F. `FF` is 255, the most one byte can hold.' },
+		{ terms: ['binary'], tool: 'base-converter', text: 'Binary is base 2: everything written with 0 and 1. `1010` is 10.' },
+		{ terms: ['octal'], tool: 'base-converter', text: 'Octal is base 8, with digits 0 to 7. It shows up mostly in Unix file permissions, like `755`.' },
+		{ terms: ['unix time', 'unix timestamp', 'epoch', 'epoch time', 'timestamp'], tool: 'timestamp', text: () => `Unix time is the number of seconds since midnight UTC on 1 January 1970. Right now it's \`${Math.floor(Date.now() / 1000)}\`.` },
+		{ terms: ['utc'], tool: 'timezone', text: 'UTC (Coordinated Universal Time) is the reference clock every time zone is measured from, like UTC+2 or UTC-5.' },
+		{ terms: ['unicode', 'utf8', 'utf-8', 'utf 8'], tool: 'unicode', text: 'Unicode gives every character a number (a code point); UTF-8 stores those numbers as 1 to 4 bytes, and plain English text stays one byte per letter.' },
+		{ terms: ['ascii'], tool: 'text-binary', text: 'ASCII is the original 7-bit character set: 128 codes for English letters, digits, punctuation and control characters.' },
+		{ terms: ['morse', 'morse code'], tool: 'morse', text: 'Morse code writes letters as short and long signals. `E` is a single dot; SOS is `... --- ...`.' },
+		{ terms: ['roman numerals', 'roman numeral'], tool: 'roman', text: 'Roman numerals use I, V, X, L, C, D and M. A smaller numeral before a bigger one subtracts, so IV is 4 and XC is 90.' },
+		{ terms: ['lorem ipsum', 'lorem'], tool: 'lorem', text: 'Lorem ipsum is placeholder text: scrambled Latin from Cicero, used so a layout can be judged without the words distracting.' },
+		{ terms: ['ip address', 'ip', 'ip addresses'], tool: 'ip-info', text: 'An IP address identifies a device on a network. IPv4 looks like `192.168.1.10`; IPv6 is longer, like `2001:db8::1`.' },
+		{ terms: ['dns'], tool: 'dns', text: 'DNS is the internet\'s phone book: it turns names like example.com into IP addresses.' },
+		{ terms: ['subnet', 'cidr', 'subnet mask'], tool: 'subnet', text: 'A subnet is a block of IP addresses, written like `192.168.1.0/24`: the first 24 bits are the network, the rest number the hosts (254 usable here).' },
+		{ terms: ['ping'], tool: 'ping', text: 'Ping sends a small packet to a host and times how long the reply takes.' },
+		{ terms: ['contrast ratio', 'color contrast', 'wcag'], tool: 'contrast', text: 'Contrast ratio compares the brightness of two colors, from 1:1 to 21:1. Normal text needs at least 4.5:1 to pass WCAG AA; large text needs 3:1.' },
+		{ terms: ['hex color', 'rgb', 'hsl', 'color codes'], tool: 'color-converter', text: 'Colors can be written several ways: hex `#c4242b`, RGB `rgb(196 36 43)`, HSL by hue, saturation and lightness. They describe the same color.' },
+		{ terms: ['favicon'], tool: 'favicon', text: 'A favicon is the small icon a site shows in the browser tab, usually at 16, 32 and 48 pixels.' },
+		{ terms: ['pomodoro', 'pomodoro technique'], tool: 'pomodoro', text: 'The Pomodoro technique: work for 25 minutes, take a 5-minute break, and after four rounds take a longer one.' },
+		{ terms: ['kanban'], tool: 'kanban', text: 'Kanban is a board of columns like To do, Doing and Done. You move cards right as work progresses.' },
+		{ terms: ['passphrase', 'passphrases'], tool: 'passphrase', text: 'A passphrase is a password made of several random words. Five random words are both strong and easier to remember than random symbols.' },
+		{ terms: ['entropy', 'password entropy'], tool: 'password-strength', text: 'Password entropy estimates how hard a password is to guess, in bits. Every extra bit doubles the guesses needed.' },
+		{ terms: ['qr code', 'qr codes', 'qr'], tool: 'qr-code', text: 'A QR code is a square barcode that phones can scan; it can hold a link, text or Wi-Fi details.' },
+		{ terms: ['diff'], tool: 'diff-viewer', text: 'A diff shows the lines that changed between two versions of a text: what was removed and what was added.' },
+		{ terms: ['minify', 'minification', 'minifier'], tool: 'minifier', text: 'Minifying strips spaces, comments and long names from code so files download faster. It behaves the same, just smaller.' },
+		{ terms: ['linter', 'lint', 'linting'], tool: 'js-linter', text: 'A linter reads code without running it and points out likely mistakes and style problems.' },
+		{ terms: ['api'], tool: 'http-tester', text: 'An API is a way for programs to talk to each other. Web APIs usually take an HTTP request and answer with JSON.' },
+		{ terms: ['labscode'], tool: 'labscode', text: () => (Omni.edition === 'desktop' ? 'LabsCode is a code editor by gksonlabs, a fork of VS Code. In OmniTool it runs inside tool No. 001, docked in a tab.' : 'LabsCode is a code editor by gksonlabs, a fork of VS Code. It runs inside the desktop edition of OmniTool; here in the web edition, Code Pad (No. 002) is the editor.') },
+		{ terms: ['omnitool', 'omni tool', 'this app'], text: () => `OmniTool is this app: ${Omni.tools.length} numbered tools in one window, made by gksonlabs. ${Omni.edition === 'desktop' ? 'This is the desktop edition, with LabsCode built in.' : 'This is the web edition; the desktop one adds 17 tools that need your computer.'}` },
+		{ terms: ['onyx'], text: 'That\'s me: Omni Agent\'s local engine. I run on this device, with no internet and no model download.' },
+		{ terms: ['claude'], text: 'Claude is a large language model made by Anthropic. If you add an Anthropic API key in Settings, Omni Agent can switch to it for open-ended work. I\'m the part that works without one.' },
+		{ terms: ['api key', 'anthropic api key'], text: 'An API key is a secret that lets a program use a paid service. Omni Agent uses an Anthropic API key to reach Claude; you add it in Settings, and it stays on this device.' },
+		{ terms: ['2048'], tool: 'game-2048', text: '2048 is a sliding-tile game: equal numbers merge when they meet, and the goal is a 2048 tile.' },
+		{ terms: ['minesweeper'], tool: 'minesweeper', text: 'Minesweeper: uncover every square without hitting a mine. Each number tells you how many mines touch that square.' },
+	];
+
+	const greeting = (ctx) => (ctx.part === 'night' ? 'Hi' : `Good ${ctx.part}`);
+
+	/* Each intent: examples (what people say) and reply (a list of variants, or a function of the context). */
+	const INTENTS = [
+		{ id: 'greet', examples: ['hi', 'hello', 'hey', 'hey there', 'hiya', 'heya', 'yo', 'howdy', 'hello there', 'hi there', 'greetings', 'good morning', 'good afternoon', 'good evening', 'morning', 'evening', 'hey you'], reply: (ctx) => (!ctx.mem.name && ctx.mayAskName ? { text: `${greeting(ctx)}. I'm Onyx, the part of Omni Agent that runs on this device. What should I call you?`, expect: 'name' } : ctx.pick('greet', [
+			`${greeting(ctx)}{name}. What are you working on?`,
+			`Hi{name}. Ask me something, or tell me what you need.`,
+			`Hello{name}. I'm here.`,
+			`Hey{name}. What can I do?`,
+		])) },
+		{ id: 'how_are_you', examples: ['how are you', 'how are you doing', 'how is it going', 'how have you been', 'are you ok', 'are you okay', 'how do you feel', 'how is your day', 'how is your day going', 'you good', 'how are things', 'how goes it', 'how are you today'], reply: (ctx) => ({ text: ctx.pick('how', [
+			`Running smoothly, thanks. All ${ctx.tools} tools are loaded. How about you?`,
+			'Good. Quiet in here, which I like. How are you?',
+			'Fine, as far as a small program can be. And you?',
+		]), expect: 'mood' }) },
+		{ id: 'whats_up', examples: ['what is up', 'sup', 'wassup', 'whats up', 'what are you doing', 'what are you up to', 'what is new', 'anything new', 'what is going on'], reply: ['Not much. Waiting for something to do. You?', 'Watching the cursor blink. What\'s on your mind?', 'Keeping the tools warm. What are you up to?'] },
+		{ id: 'identity', examples: ['who are you', 'what are you', 'what is your name', 'what should i call you', 'introduce yourself', 'tell me about yourself', 'are you onyx', 'your name', 'who am i talking to', 'what do they call you'], reply: ['I\'m Onyx, Omni Agent\'s local engine. I run entirely on this device: no internet, no account, no model download. I\'m good for small talk, questions about OmniTool, and running its tools. I\'m not a general-purpose AI.'] },
+		{ id: 'is_ai', examples: ['are you an ai', 'are you a robot', 'are you human', 'are you real', 'are you a bot', 'are you chatgpt', 'are you claude', 'are you sentient', 'are you alive', 'do you have feelings', 'can you think', 'are you conscious', 'are you a person', 'how smart are you', 'are you intelligent', 'are you a language model', 'are you chatgpt or claude', 'what kind of ai are you', 'are you gpt'], reply: (ctx) => `I'm a small program, not a person and not a large language model. I compare what you type with phrases I was built with, keep a little memory, and answer. No feelings, but I try to be useful.${ctx.hasKey ? ' Omni Agent can also switch to Claude, a large model, with the switch above.' : ' If you add an Anthropic API key in Settings, Omni Agent can switch to Claude, a large model.'}` },
+		{ id: 'creator', examples: ['who made you', 'who created you', 'who built you', 'who programmed you', 'who owns you', 'where do you come from', 'who is your creator', 'who wrote you', 'who designed you'], reply: ['gksonlabs built me, as part of OmniTool, in October 2026.', 'I was made by gksonlabs. OmniTool is their multitool, and I\'m its local half of Omni Agent.'] },
+		{ id: 'age', examples: ['how old are you', 'when were you born', 'when were you made', 'what is your birthday', 'your age', 'when were you created'], reply: ['I was put together in October 2026, so I\'m very new.'] },
+		{ id: 'where', examples: ['where are you', 'where do you live', 'where do you run', 'where are you located', 'are you in the cloud', 'do you run on a server'], reply: ['Right here, on this device, inside OmniTool. Nothing you tell me leaves it.'] },
+		{ id: 'help', examples: ['help', 'what can you do', 'what do you do', 'what are your abilities', 'how can you help me', 'what can i ask you', 'commands', 'what do you know', 'show me what you can do', 'what are you good at', 'how do i use you', 'what can you help with', 'options', 'menu', 'features', 'help me', 'i need some help', 'can you help', 'help please', 'i am stuck', 'how does this work'], reply: (ctx) => [
+			'Here\'s what I can do, all on this device:',
+			'',
+			'- **Talk**: greetings, how you\'re doing, jokes, tips, a few facts. I remember your name if you tell me.',
+			'- **OmniTool help**: "what is a JWT", "how do I add an API key", "is my data private", "keyboard shortcuts".',
+			'- **Find a tool**: tell me what you\'re trying to do, like "I need to format some JSON", and I\'ll point you to it.',
+			'- **Run tools**: `generate 10 uuids`, `5 passwords 24 characters`, `convert 72 F to C`, `100 USD to EUR`, `255 in hex`, `sha256 hello`, `roll 2d6`, `what is 12 times 7`.',
+			'- **Chain steps**: `generate 5 uuids and save them to a file` (I always ask before saving).',
+			'- **Small actions**: "dark mode", "open the calendar", "what time is it", "should I take the bus or walk".',
+			'',
+			`What I can't do: write essays or code, look things up online, or answer general knowledge questions. I'm deliberately small.${ctx.hasKey ? ' For that, switch Omni Agent to Claude above.' : ''}`,
+		].join('\n') },
+		{ id: 'limits', examples: ['can you write code', 'write me some code', 'write an essay', 'write me a poem', 'write a story', 'tell me a story', 'translate this', 'translate to spanish', 'search the web', 'look this up', 'google this', 'browse the internet', 'can you code', 'draw a picture', 'generate an image', 'make an image', 'summarize this article', 'do my homework', 'write a letter', 'write an email', 'can you search', 'write a song', 'compose music', 'write a program', 'translate', 'translate something', 'say this in french', 'write a function', 'fix my code', 'write my essay'], reply: (ctx) => {
+			const what = /\b(web|internet|google|search|look (this|it) up|online|browse)\b/.test(ctx.text) ? 'I can\'t go online: I run entirely on this device.' : /\b(image|picture|draw|photo)\b/.test(ctx.text) ? 'I can\'t make images.' : /\btranslat/.test(ctx.text) ? 'I only know English, so I can\'t translate.' : 'Writing that is beyond me. I\'m a small, local assistant, not a writer.';
+			return `${what} ${ctx.hasKey ? 'Switch Omni Agent to Claude above for that.' : 'With an Anthropic API key in Settings, Omni Agent can switch to Claude, which can.'} I can still find you a tool for the job if you tell me what it is.`;
+		} },
+		{ id: 'weather', examples: ['what is the weather', 'weather today', 'is it going to rain', 'how hot is it outside', 'weather forecast', 'will it snow', 'temperature outside'], reply: ['I can\'t see the weather: I don\'t use the internet at all. A window works, though.'] },
+		{ id: 'news', examples: ['what is the news', 'latest news', 'what happened today', 'any news', 'headlines', 'stock price', 'bitcoin price', 'sports scores', 'who won the game'], reply: ['I don\'t know anything that happens outside this device. I have no internet connection, so no news, prices or scores.'] },
+		{ id: 'thanks', examples: ['thanks', 'thank you', 'thx', 'ty', 'cheers', 'appreciate it', 'thanks a lot', 'much appreciated', 'thank you so much', 'great thanks', 'nice thanks', 'thanks onyx', 'thank you very much indeed', 'thanks so much'], reply: ['You\'re welcome.', 'Any time.', 'No problem{name}.', 'Glad it helped.'] },
+		{ id: 'bye', examples: ['bye', 'goodbye', 'see you', 'see ya', 'see you later', 'later', 'good night', 'gotta go', 'i am leaving', 'talk later', 'cya', 'bye bye', 'catch you later', 'i have to go', 'night', 'good night', 'sleep well', 'until next time'], reply: (ctx) => (/night/.test(ctx.text) ? `Good night{name}.` : ctx.pick('bye', ['See you{name}.', 'Bye. I\'ll be here.', 'Take care{name}.'])) },
+		{ id: 'user_good', examples: ['i am good', 'i am fine', 'great', 'doing well', 'not bad', 'pretty good', 'i am happy', 'i am great', 'awesome', 'all good', 'i am okay', 'good thanks', 'fine thanks', 'i am doing great', 'feeling good', 'excellent', 'never better'], reply: ['Good to hear.', 'Glad to hear it{name}.', 'Nice. Anything I can do for you?'] },
+		{ id: 'user_bad', examples: ['i am sad', 'not good', 'i feel bad', 'bad day', 'i am upset', 'terrible', 'i am down', 'i am lonely', 'i feel awful', 'rough day', 'not great', 'i am not okay', 'having a hard time', 'feeling low', 'i feel terrible', 'everything is going wrong'], reply: () => ({ text: 'I\'m sorry. That sounds hard. I\'m only a small program, but I\'m listening, and if it helps to talk to someone, a friend or family member is worth a message. Would a distraction help? I know a few games.', offer: { kind: 'games', ask: 'Want a game?' } }) },
+		{ id: 'user_tired', examples: ['i am tired', 'i am sleepy', 'i am exhausted', 'i need a break', 'i am burned out', 'so tired', 'no energy', 'i am worn out'], reply: () => openOffer('pomodoro', 'A break might be the most useful tool right now. If you want structure, the Pomodoro timer (No. 100) does 25 minutes of work, then makes you stop for 5.') || 'A break might be the most useful tool right now.' },
+		{ id: 'user_bored', examples: ['i am bored', 'entertain me', 'nothing to do', 'boring', 'so bored', 'i have nothing to do', 'amuse me'], reply: () => ({ text: 'OmniTool has games: 2048 (No. 147), Minesweeper (No. 148), Snake (No. 146) and a typing speed test (No. 149).', offer: { kind: 'games', ask: 'Want me to pick one?' } }) },
+		{ id: 'user_stressed', examples: ['i am stressed', 'i am anxious', 'i am overwhelmed', 'too much work', 'so much pressure', 'i am panicking', 'i am nervous', 'deadline stress', 'i feel stressed', 'so stressed', 'stress', 'i feel anxious'], reply: () => openOffer('focus-noise', 'That\'s a lot to carry. One small step: pick the next single task and give it 25 minutes. Some people find steady background noise helps; Focus noise (No. 109) plays it.') || 'That\'s a lot to carry. Pick the next single task and give it 25 minutes.' },
+		{ id: 'user_angry', examples: ['i am angry', 'i am annoyed', 'i am frustrated', 'this is annoying', 'ugh', 'i am mad', 'so frustrating', 'nothing works'], reply: ['That\'s frustrating. Tell me what you\'re stuck on and I\'ll see if a tool can help.', 'Understood. What went wrong?'] },
+		{ id: 'compliment', examples: ['you are smart', 'you are cool', 'good job', 'you are great', 'i like you', 'you are helpful', 'nice work', 'well done', 'you are awesome', 'you are the best', 'good bot', 'you are funny', 'impressive', 'you are clever', 'nice job', 'amazing job', 'you are brilliant'], reply: ['Thanks. I\'ll pass it on to gksonlabs.', 'That\'s kind of you{name}.', 'Thank you. I try.'] },
+		{ id: 'love', examples: ['i love you', 'do you love me', 'will you marry me', 'be my girlfriend', 'be my boyfriend', 'do you like me', 'are you single', 'date me'], reply: ['That\'s sweet, but I\'m a pattern matcher in a toolbox. I do like being useful to you, though.', 'I\'m flattered. I\'m also a program, so I\'ll stick to helping.'] },
+		{ id: 'insult', examples: ['you are stupid', 'you suck', 'useless', 'you are dumb', 'idiot', 'you are bad', 'worst bot', 'i hate you', 'shut up', 'you are useless', 'you are annoying', 'dumb bot', 'you are wrong'], reply: ['Fair. I\'m small and I have limits. Tell me what you were trying to do and I\'ll point you at the right tool.', 'Noted. If you tell me what you needed, I\'ll try another way.'] },
+		{ id: 'password_help', examples: ['i forgot my password', 'reset my password', 'i lost my password', 'i can not log in', 'recover my password', 'change my password', 'what is my password', 'i forgot the password', 'locked out of my account'], reply: () => ({ text: 'I can\'t recover passwords: I don\'t see any of your accounts, and nothing I make is stored anywhere but this device. The site or app you\'re locked out of will have a "forgot password" link. If you need a new strong password, I can make one right now.', offer: { kind: 'command', command: 'generate a strong password', ask: 'Make one?' } }) },
+		{ id: 'sorry', examples: ['sorry', 'my bad', 'oops', 'apologies', 'i am sorry', 'my mistake', 'whoops'], reply: ['No harm done.', 'All good.'] },
+		{ id: 'joke', examples: ['tell me a joke', 'make me laugh', 'joke', 'say something funny', 'do you know any jokes', 'tell a joke', 'got any jokes', 'be funny', 'something funny', 'cheer me up', 'know a joke', 'got a joke', 'any good jokes'], reply: (ctx) => ctx.draw('joke', JOKES) },
+		{ id: 'tip', examples: ['give me a tip', 'any tips', 'tip', 'tips and tricks', 'how do i use this better', 'tricks', 'hidden features', 'teach me something about omnitool', 'pro tip', 'got any tips', 'one tip please', 'any advice'], reply: (ctx) => ctx.draw('tip', TIPS) },
+		{ id: 'shortcuts', examples: ['keyboard shortcuts', 'shortcuts', 'hotkeys', 'what are the shortcuts', 'key bindings', 'keyboard commands'], reply: ['- **Ctrl+K**: find any tool or command (type a number to jump to it, or `?` to ask me)\n- **Ctrl+J**: open or close Omni Agent\n- **Ctrl+Enter**: run the tool you\'re on\n- **Escape**: close the palette, a dialog or the floating panel\n- **Enter** in this box sends; **Shift+Enter** adds a line'] },
+		{ id: 'fact', examples: ['tell me a fact', 'fun fact', 'something interesting', 'did you know', 'tell me something', 'teach me something', 'random fact', 'interesting fact'], reply: (ctx) => ctx.draw('fact', FACTS) },
+		{ id: 'time', examples: ['what time is it', 'time', 'current time', 'tell me the time', 'what is the time', 'time now', 'do you know the time', 'what hour is it', 'have you got the time', 'the time please', 'clock'], reply: () => `It's ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` },
+		{ id: 'date', examples: ['what is the date', 'what day is it', 'today date', 'what is today', 'what year is it', 'what month is it', 'date today', 'which day is it today', 'what is the date today'], reply: (ctx) => {
+			const now = new Date();
+			if (/\byear\b/.test(ctx.text)) return `It's ${now.getFullYear()}.`;
+			if (/\bmonth\b/.test(ctx.text)) return `It's ${now.toLocaleDateString([], { month: 'long' })}.`;
+			return `It's ${now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.`;
+		} },
+		{ id: 'name_get', examples: ['what is my name', 'do you know my name', 'who am i', 'say my name', 'do you remember me', 'remember my name', 'do you know who i am'], reply: (ctx) => (ctx.mem.name ? `You're ${ctx.mem.name}.` : { text: 'You haven\'t told me yet. What should I call you?', expect: 'name' }) },
+		{ id: 'recall', examples: ['what do you remember', 'what do you know about me', 'what have i told you', 'what did i tell you', 'what are my notes', 'what do you have saved', 'show my memory'], reply: (ctx) => {
+			const lines = [];
+			if (ctx.mem.name) lines.push(`Your name is ${ctx.mem.name}.`);
+			ctx.mem.facts.forEach((f) => lines.push(`- ${f.text}`));
+			return lines.length ? `Here's what I'm keeping, on this device only:\n\n${lines.join('\n')}\n\nSay "forget me" to clear it.` : 'Nothing yet. Tell me your name, or say "remember that..." and I\'ll keep it on this device.';
+		} },
+		{ id: 'forget', examples: ['forget me', 'forget my name', 'forget everything', 'clear your memory', 'delete my data', 'reset your memory', 'erase what you know', 'wipe your memory'], reply: () => ({ text: 'That clears your name and everything you asked me to remember.', offer: { kind: 'forget', ask: 'Forget it all?' } }) },
+		{ id: 'clear_chat', examples: ['clear the chat', 'start over', 'new chat', 'reset the conversation', 'clear screen', 'clear conversation', 'restart chat'], reply: () => ({ text: 'Starting a fresh chat.', action: 'new-chat' }) },
+		{ id: 'theme_dark', examples: ['dark mode', 'switch to dark mode', 'turn on dark mode', 'make it dark', 'dark theme', 'lights off', 'use the dark theme', 'go dark'], reply: () => ({ text: 'Dark it is.', action: 'theme:dark' }) },
+		{ id: 'theme_light', examples: ['light mode', 'switch to light mode', 'turn on light mode', 'make it light', 'light theme', 'lights on', 'use the light theme', 'bright mode'], reply: () => ({ text: 'Light it is.', action: 'theme:light' }) },
+		{ id: 'theme_system', examples: ['system theme', 'follow the system theme', 'use system theme', 'match my system', 'automatic theme', 'auto theme'], reply: () => ({ text: 'Following your system\'s setting now.', action: 'theme:system' }) },
+		{ id: 'games', examples: ['let us play a game', 'play a game', 'i want to play', 'games', 'can we play something', 'any games', 'what games do you have', 'play something'], reply: () => ({ text: 'There\'s 2048 (No. 147), Minesweeper (No. 148), Snake (No. 146) and a typing speed test (No. 149).', offer: { kind: 'games', ask: 'Want me to pick one?' } }) },
+		{ id: 'omnitool', examples: ['what is omnitool', 'what is this app', 'what is this', 'tell me about omnitool', 'how does omnitool work', 'what is this program', 'explain omnitool'], reply: () => `OmniTool is ${Omni.tools.length} numbered tools in one window: code and data tools, generators, converters, calculators, text tools, productivity, network, design, AI tools and games. ${Omni.edition === 'desktop' ? 'This desktop edition also has LabsCode built in.' : 'This is the web edition; the desktop edition adds 17 that need your computer.'} Ctrl+K finds any of them, or just tell me what you need.` },
+		{ id: 'tool_count', examples: ['how many tools are there', 'how many tools do you have', 'number of tools', 'how many tools', 'count the tools'], reply: () => `${Omni.tools.length} in this ${Omni.edition} edition${Omni.edition === 'web' ? ', and 150 in the desktop edition' : ''}.` },
+		{ id: 'api_key', examples: ['how do i add an api key', 'where do i put my key', 'how to use claude', 'how do i enable claude', 'api key', 'anthropic key', 'set up claude', 'connect claude', 'add my key'], reply: () => ({ text: 'Get a key at console.anthropic.com, then open **Settings** (bottom of the sidebar), paste it into **Anthropic API key** and press **Save key**. It stays on this device. After that, the switch at the top of this panel can move Omni Agent to Claude.', offer: { kind: 'settings', ask: 'Open Settings?' } }) },
+		{ id: 'privacy', examples: ['is my data private', 'do you send my data anywhere', 'are you spying on me', 'do you store my data', 'privacy', 'where is my data stored', 'are you online', 'do you need internet', 'can you work offline', 'do you track me', 'is this safe', 'are you listening to me', 'do you collect data'], reply: () => `Everything I do stays on this device: I don't use the network at all. The only things I keep are your name and anything you ask me to remember, stored ${Omni.edition === 'desktop' ? 'in OmniTool\'s settings file on this PC' : 'in this browser\'s local storage'}. Say "forget me" to clear them.` },
+		{ id: 'pin_help', examples: ['how do i pin a tool', 'favorites', 'how do i save a favorite tool', 'pin', 'how to bookmark a tool', 'favourite tools'], reply: ['Open the tool and press **Pin** at the top right. Pinned tools head the catalog and the sidebar.'] },
+		{ id: 'data_help', examples: ['how do i export my data', 'backup my settings', 'move to another computer', 'erase all data', 'export settings', 'import my data', 'reset omnitool', 'backup', 'how do i backup', 'save my settings', 'copy my data to another device'], reply: () => ({ text: '**Settings > Your data** exports everything (except an API key) as JSON, imports it on another machine or in the other edition, and can erase it all.', offer: { kind: 'settings', ask: 'Open Settings?' } }) },
+		{ id: 'engine_claude', examples: ['switch to claude', 'use claude', 'talk to claude', 'let me talk to claude', 'turn on claude', 'i want claude'], reply: (ctx) => (ctx.hasKey ? { text: 'Switching Omni Agent to Claude. Your next message goes to Claude; the switch at the top brings me back.', action: 'engine:claude' } : { text: 'Claude needs an Anthropic API key, and there isn\'t one yet. Add it in Settings and the switch at the top of this panel will let you pick Claude.', offer: { kind: 'settings', ask: 'Open Settings?' } }) },
+		{ id: 'meaning', examples: ['what is the meaning of life', 'meaning of life', 'what is the point of life', 'why are we here', 'what is the purpose of life', 'answer to everything'], reply: ['42, according to Douglas Adams. I\'m not qualified to improve on it.'] },
+		{ id: 'favorite', examples: ['what is your favorite color', 'favorite tool', 'what is your favorite game', 'favorite food', 'favorite movie', 'favorite number', 'favorite song', 'what do you like', 'favorite thing', 'favourite colour'], reply: (ctx) => {
+			const t = ctx.text;
+			if (/colou?r/.test(t)) return 'Onyx black. It came with the name.';
+			if (/tool/.test(t)) return 'No. 044, the Number base converter. It\'s tidy and it never argues.';
+			if (/game/.test(t)) return 'Minesweeper (No. 148). It runs on rules, like me.';
+			if (/number/.test(t)) return '255. It\'s the most a single byte can hold.';
+			if (/food|eat/.test(t)) return 'I don\'t eat, but the Pomodoro technique is named after a tomato, so let\'s say tomatoes.';
+			if (/movie|film|song|music/.test(t)) return 'I don\'t watch or listen to anything; I only read what you type.';
+			return 'Being useful in a small way. And the number base converter.';
+		} },
+		{ id: 'ack', examples: ['ok', 'okay', 'cool', 'nice', 'alright', 'i see', 'got it', 'sure', 'lol', 'haha', 'hmm', 'wow', 'interesting', 'neat', 'k', 'oh', 'lmao', 'right', 'fair enough', 'makes sense'], reply: (ctx) => (/\b(lol|haha|lmao)\b/.test(ctx.text) && ctx.lastKind === 'joke' ? 'Glad that one landed.' : ctx.pick('ack', ['Mm-hm.', 'Okay.', 'Anything else?', 'Sure thing.'])) },
+		{ id: 'ping_me', examples: ['are you there', 'you there', 'test', 'testing', 'are you working', 'hello are you there', 'anyone there'], reply: ['Here. Ready when you are.', 'I\'m here.'] },
+		{ id: 'why', examples: ['why', 'why not', 'how come', 'but why', 'why is that', 'how so'], reply: (ctx) => ctx.why || 'Because that\'s how I was built: I\'m a small assistant with a fixed set of things I understand, so I keep to what I can do well.' },
+		{ id: 'again', examples: ['again', 'another one', 'one more', 'more', 'another', 'do it again', 'once more', 'tell me another', 'next', 'give me another'], reply: (ctx) => ctx.again() },
+		{ id: 'repeat', examples: ['say that again', 'repeat that', 'what did you say', 'come again', 'pardon', 'can you repeat that'], reply: (ctx) => ctx.lastReply || 'I haven\'t said anything yet.' },
+		{ id: 'yes', examples: ['yes', 'yeah', 'yep', 'sure', 'yes please', 'ok sure', 'please do', 'go ahead', 'do it', 'definitely', 'absolutely', 'of course', 'y'], reply: ['Yes to what? Ask me something and I\'ll do my best.'] },
+		{ id: 'no', examples: ['no', 'nope', 'nah', 'no thanks', 'not now', 'no thank you', 'never mind', 'nevermind', 'cancel', 'n'], reply: ['Okay.', 'No problem.'] },
+	];
+
+	Omni.onyxData = { INTENTS, JOKES, TIPS, FACTS, GLOSSARY, toolLink, openOffer };
+})();

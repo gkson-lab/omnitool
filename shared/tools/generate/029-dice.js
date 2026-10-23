@@ -46,6 +46,7 @@
 		keywords: ['dice', 'roll', 'd20', 'd6', 'rpg', 'dnd', 'tabletop'],
 		description: 'Rolls dice in standard notation: 3d6+2, 4d6kh3 (keep highest 3), 2d20kl1 (disadvantage), d%.',
 		action: 'Roll',
+		chance: true,
 		inputs: [
 			{ name: 'notation', label: 'Dice', type: 'text', mono: true, default: '2d20kh1 + 5', hint: 'kh/kl keep highest or lowest, dh/dl drop highest or lowest' },
 			{ name: 'times', label: 'Roll this many times', type: 'number', min: 1, max: 100, default: 1 },

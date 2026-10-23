@@ -13,6 +13,10 @@ Omni.register({
 		const level = h('select', { 'aria-label': 'Difficulty' }, h('option', { value: 'easy' }, 'Easy 9x9, 10 mines'), h('option', { value: 'medium' }, 'Medium 16x16, 40 mines'), h('option', { value: 'hard' }, 'Hard 16x30, 99 mines'));
 		level.value = ctx.store.get('level', 'easy');
 		const grid = h('div', { class: 'mines', role: 'grid', 'aria-label': 'Minefield' });
+		// Cells opened by the current action and their distance from the clicked cell, for the outward reveal.
+		const fresh = new Map();
+		let origin = null;
+		const distance = (i) => (origin ? Math.max(Math.abs(Math.floor(i / cols) - origin[0]), Math.abs((i % cols) - origin[1])) : 0);
 		const status = h('p', { role: 'status', 'aria-live': 'polite' });
 		const info = h('span', { class: 'mono' });
 		let rows, cols, mines, cells, started, over, flags, t0, timer, focus;
@@ -37,7 +41,13 @@ Omni.register({
 		const end = (won) => {
 			over = true;
 			clearInterval(timer);
-			cells.forEach((c) => c.mine && (c.open = true));
+			cells.forEach((c, i) => {
+				if (c.mine && !c.open) {
+					c.open = true;
+					fresh.set(i, distance(i));
+				}
+			});
+			if (!won) Omni.motion.nudge(grid, 'lost');
 			const secs = Math.floor((Date.now() - t0) / 1000);
 			const bestKey = 'best.' + level.value;
 			const best = ctx.store.get(bestKey, null);
@@ -49,6 +59,7 @@ Omni.register({
 			if (over) return;
 			const cell = at(r, c);
 			if (cell.open || cell.flag) return;
+			origin = [r, c];
 			if (!started) {
 				lay(r, c);
 				started = true;
@@ -65,6 +76,7 @@ Omni.register({
 				const cur = at(y, x);
 				if (cur.open || cur.flag) continue;
 				cur.open = true;
+				fresh.set(y * cols + x, Math.max(Math.abs(y - r), Math.abs(x - c)));
 				if (cur.n === 0) neighbors(y, x).forEach((p) => stack.push(p));
 			}
 			if (cells.filter((x) => !x.open).length === mines) end(true);
@@ -82,12 +94,13 @@ Omni.register({
 			flags += cell.flag ? 1 : -1;
 		};
 		function draw() {
+			setTimeout(() => fresh.clear(), 0);
 			grid.style.gridTemplateColumns = `repeat(${cols}, 32px)`;
 			grid.replaceChildren(...cells.map((cell, i) => {
 				const r = Math.floor(i / cols);
 				const c = i % cols;
 				const label = cell.open ? (cell.mine ? 'mine' : cell.n ? String(cell.n) : 'empty') : cell.flag ? 'flagged' : 'hidden';
-				const b = h('button', { type: 'button', role: 'gridcell', class: (cell.open ? 'open' : '') + (cell.boom ? ' boom' : ''), tabindex: focus === i ? '0' : '-1', 'aria-label': `Row ${r + 1}, column ${c + 1}: ${label}`, 'data-i': i }, cell.open ? (cell.mine ? '*' : cell.n || '') : cell.flag ? 'F' : '');
+				const b = h('button', { type: 'button', role: 'gridcell', class: (cell.open ? 'open' : '') + (cell.boom ? ' boom' : '') + (fresh.has(i) ? ' revealed' : ''), style: fresh.has(i) ? { '--d': Math.min(fresh.get(i) * 18, 320) + 'ms' } : null, tabindex: focus === i ? '0' : '-1', 'aria-label': `Row ${r + 1}, column ${c + 1}: ${label}`, 'data-i': i }, cell.open ? (cell.mine ? '*' : cell.n || '') : cell.flag ? 'F' : '');
 				b.addEventListener('click', () => {
 					focus = i;
 					cell.open ? chord(r, c) : open(r, c);

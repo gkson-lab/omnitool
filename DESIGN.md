@@ -1,10 +1,12 @@
 # OmniTool design
 
-Reading this as: a desktop and web multitool for developers who keep it open beside their work, in the gklabs paper, ink and signal-red language with a parts-catalog motif, dial ENERGY 2 / RHYTHM 2 / MOTION 2.
+Reading this as: a desktop and web multitool for developers who keep it open beside their work, in the gklabs paper, ink and signal-red language with a parts-catalog motif, dial ENERGY 2 / RHYTHM 2 / MOTION 3.
 
 Direction from the owner: use the gklabs brand (the same values as gklabs Device Manager's DESIGN.md and the gklabs showcase), built under the antislop rules.
 
-Dial: ENERGY 2 / RHYTHM 2 / MOTION 2
+Dial: ENERGY 2 / RHYTHM 2 / MOTION 3
+
+On 2026-10-22 the owner asked for the whole app to feel much more animated, so MOTION went from 2 to 3. For a tool app, 3 means choreography: coordinated motion that shows where you came from and what just changed. It does not mean decoration on idle screens.
 
 ## Decisions and reasons
 
@@ -24,12 +26,20 @@ Dial: ENERGY 2 / RHYTHM 2 / MOTION 2
 - **Shadow only on things above the page:** the command palette, dialogs, toasts and the agent panel when it floats over a narrow window. Panels sit flat on the paper with a 1px line.
 - **No glow, no gradients, no glass.** None of them serve hierarchy here. The only gradients in the app are the ones a user builds in the gradient tool.
 - **Icons: a handful of drawn glyphs for chrome only** (search, pin, copy, close, menu, theme), stroke-matched to the 1px line weight. Categories carry no icons; their names and counts do the work.
-- **Motion.**
-  - Views cross-fade in 150 ms so a tool change reads as a change, not a flash.
-  - The agent panel and the mobile menu slide in 220 ms, because they come from an edge and should look like it.
-  - The command palette appears in 120 ms; toasts drop in once and leave after 4 s.
-  - Scale ticks fill over 300 ms so a new reading looks like movement.
-  - Reduced motion (the OS setting) turns all of it off.
+- **Motion: parts slide along rails, ink lines draw, ticks fill.** One vocabulary, so movement reads as part of the catalog, not as effects. Two curves: a decisive ease-out (`0.2, 0.8, 0.2, 1`) for everything that moves, and a small overshoot only for confirmations (copy, pin, a finished step). Timings: 120 ms for exits and presses, 220 ms for arrivals, 360 ms for page parts, 40 ms between staged parts. Everything is triggered by something you did or by a real change; nothing loops on an idle screen. The only repeating animations are the ones that mark real work in progress (a running agent step, the loading dots), and `tests/motion.js` checks that none run at rest.
+  - **Opening a tool:** the catalog row's number and name morph into the page's number and title (a view transition), and back when you return. It shows which tool opened and where you came from.
+  - **Arriving on a page:** its parts come in 40 ms apart, in reading order (header, inputs, result), so the eye goes from what you fill in to what you get.
+  - **Sidebar and segmented controls:** the current-page marker and the dark thumb slide from the old choice to the new one, so the move itself is visible.
+  - **Search and the palette:** results slide into their new rank as you type, so you see the ranking change instead of a list that flickers. The palette's selection slides with the arrow keys.
+  - **Results:** a changed number rolls (the old one leaves upward), a fresh result gets one ink line sweeping down it like a readout printing, and the scale's ticks fill one after another. Each one points at exactly what an edit changed.
+  - **Random draws:** dice, coins, random numbers and list picks show muted candidates for about 400 ms before the result settles. Without this, a coin that comes up Heads twice looks like nothing happened.
+  - **Confirmations:** Copy turns into a drawn check where you clicked, the pin swings into place and the sidebar count rolls, and a press sinks the button a pixel.
+  - **Theme:** the new theme spreads as a circle from the switch you used.
+  - **Overlays:** dialogs and the palette rise in and drop out (Escape included). Toasts slide in from the edge with a line that shows how long they stay, and pointing at one holds it. The agent panel comes in from its edge.
+  - **Omni Agent:** messages arrive from their speaker's side; a running step has a short ink line travelling under it and its dot fills when done; an approval card gets one red ring that closes in, because a decision is waiting.
+  - **Long pages:** a slim bar with the tool's number and name pins to the top once the header scrolls away (the dial's "pin"), and clicking it goes back up.
+  - **Games and timers:** 2048 tiles slide to their cells, merges pop and the new tile grows in after the slide. Minesweeper opens outward from your click and shakes once when you hit a mine. A finished timer pulses three times, then rests.
+  - **Reduced motion (the OS setting) turns all of it off**: no view transitions, no staged entrances, no scrambles, instant state changes.
 - **States.** Every data view has a waiting state (with what it is waiting for), an empty state (with the one action that fills it) and an error state (what failed and what to do). Network tools say which outside service they call.
 - **Spacing.** 4 px base. Tight groups inside a panel (8 to 12), larger gaps between panels (20 to 24), section gaps on the home catalog (40), so the eye groups by panel first.
 - **Logo.** No logo was supplied, so the product name is set as text ("OmniTool" in Archivo at width 118) with "gklabs" under it in muted mono.

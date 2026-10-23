@@ -1,0 +1,677 @@
+/* Motion (DESIGN.md, MOTION 3): parts slide along rails, ink lines draw, ticks fill. Each block says what the
+   movement tells you. Nothing moves on an idle screen; reduced motion turns all of it off at the end of the file. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ---------- Page changes ---------- */
+
+/* The main view cross-fades on its own, so the sidebar and agent panel hold still while you move between pages. */
+.view {
+  view-transition-name: view;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(view) {
+  animation: fade-out var(--t-fast) ease-in both;
+}
+
+::view-transition-new(view) {
+  animation: fade-in var(--t-base) var(--ease-out) both;
+}
+
+/* A catalog row's number and name morph into the tool page's title, and back: you see which tool opened. */
+::view-transition-group(tool-no),
+::view-transition-group(tool-name),
+::view-transition-group(page-title) {
+  animation-duration: var(--t-slow);
+  animation-timing-function: var(--ease-out);
+}
+
+/* The number morphs on its own, so it keeps its size instead of stretching to the whole label. */
+.tool-no .code {
+  display: inline-block;
+}
+
+/* The page's parts arrive in reading order (header, inputs, result) instead of all at once. */
+.view-inner {
+  animation: none;
+}
+
+.enter-item {
+  animation: rise var(--t-slow) var(--ease-out) both;
+  animation-delay: calc(var(--enter-i, 0) * var(--t-step));
+}
+
+/* The theme spreads as a circle from the control you used. */
+.theme-reveal .view {
+  view-transition-name: none;
+}
+
+.theme-reveal::view-transition-old(root) {
+  animation: none;
+}
+
+.theme-reveal::view-transition-new(root) {
+  animation: theme-reveal 480ms var(--ease-out);
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--reveal-x) var(--reveal-y));
+  }
+  to {
+    clip-path: circle(var(--reveal-r) at var(--reveal-x) var(--reveal-y));
+  }
+}
+
+/* On long tool pages a slim bar with the tool's number and name pins to the top, so you never lose which tool you are in. */
+.tool-bar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  height: 0;
+}
+
+.tool-bar button {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition: transform var(--t-base) var(--ease-out), opacity var(--t-base) var(--ease-out), visibility 0s linear var(--t-base);
+}
+
+.tool-bar.shown button {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition: transform var(--t-base) var(--ease-out), opacity var(--t-base) var(--ease-out), visibility 0s;
+}
+
+.tool-bar .no {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.tool-bar .up {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ---------- Indicators that travel ---------- */
+
+/* The sidebar marker slides from the page you left to the page you opened. */
+.nav {
+  position: relative;
+}
+
+.nav-item {
+  z-index: 1;
+}
+
+.nav-item[aria-current="page"] {
+  background: none;
+}
+
+.nav-item[aria-current="page"]::before {
+  display: none;
+}
+
+.nav-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: var(--r-control);
+  background: var(--sunken);
+  pointer-events: none;
+}
+
+.nav-marker::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: var(--r-tick);
+  background: var(--ink);
+}
+
+/* Segmented controls: the dark thumb slides to the option you picked. */
+.seg.has-thumb {
+  position: relative;
+}
+
+.seg.has-thumb > button {
+  position: relative;
+  z-index: 1;
+  transition: color var(--t-base) var(--ease-out);
+}
+
+.seg.has-thumb > button[aria-pressed="true"] {
+  background: none;
+}
+
+.seg-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+/* The palette's selection slides with the arrow keys, so your place in the list is easy to follow. */
+.palette-list {
+  position: relative;
+}
+
+.palette-list li {
+  position: relative;
+  z-index: 1;
+}
+
+.palette-list li[aria-selected="true"] {
+  background: none;
+  box-shadow: none;
+}
+
+.palette-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: var(--r-control);
+  background: var(--sunken);
+  box-shadow: inset 2px 0 var(--ink);
+  pointer-events: none;
+}
+
+.palette .enter-item {
+  animation-duration: var(--t-base);
+  animation-delay: calc(var(--enter-i, 0) * 18ms);
+}
+
+/* ---------- Catalog rows ---------- */
+
+/* An ink underline draws under the tool you are about to open, and its number steps toward it. */
+.catalog .name {
+  background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+  transition: background-size var(--t-base) var(--ease-out);
+}
+
+.catalog a:hover .name,
+.catalog a:focus-visible .name {
+  text-decoration: none;
+  background-size: 100% 1px;
+}
+
+.catalog .no {
+  transition: transform var(--t-base) var(--ease-out), color var(--t-base) var(--ease-out);
+}
+
+.catalog a:hover .no,
+.catalog a:focus-visible .no {
+  transform: translateX(3px);
+  color: var(--ink);
+}
+
+/* ---------- Buttons and focus ---------- */
+
+/* A press sinks a pixel: the click registered, before anything else happens. */
+.btn,
+.icon-btn,
+.find-button {
+  transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-fast) var(--ease-out);
+}
+
+.btn:active:not(:disabled),
+.icon-btn:active,
+.find-button:active {
+  transform: translateY(1px) scale(0.98);
+  transition-duration: 60ms;
+}
+
+/* Focus snaps in from a little further out, so a Tab press is easy to follow. */
+:focus-visible {
+  animation: focus-in var(--t-fast) var(--ease-out);
+}
+
+@keyframes focus-in {
+  from {
+    outline-offset: 6px;
+  }
+}
+
+/* Copy turns into a drawn check where you clicked. */
+.copy.copied {
+  color: var(--ink);
+}
+
+.copy.copied .icon path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: draw var(--t-slow) var(--ease-out) forwards;
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Pinning swings the pin into place, and the sidebar's count rolls to its new number. */
+.pin-swing .icon {
+  transform-origin: 50% 25%;
+  animation: swing var(--t-slow) var(--ease-swing);
+}
+
+@keyframes swing {
+  from {
+    transform: rotate(-28deg) translateY(-3px);
+  }
+}
+
+.count.bump {
+  display: inline-block;
+  animation: count-in var(--t-base) var(--ease-out);
+}
+
+@keyframes count-in {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+}
+
+/* ---------- Results ---------- */
+
+/* A fresh result: an ink line sweeps down the block once, like a readout printing. */
+.out-block {
+  position: relative;
+}
+
+.out-block.landed {
+  animation: land var(--t-slow) var(--ease-out);
+}
+
+.out-block.landed::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: var(--r-tick);
+  background: var(--ink);
+  pointer-events: none;
+  animation: scan var(--t-slow) var(--ease-out) forwards;
+}
+
+@keyframes land {
+  from {
+    opacity: 0.35;
+  }
+}
+
+@keyframes scan {
+  from {
+    top: 0;
+    opacity: 0.85;
+  }
+  to {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+/* A changed value rolls: the old number leaves upward as the new one comes in. */
+.reading dd > span {
+  display: inline-block;
+}
+
+.reading dd.rolling {
+  position: relative;
+  overflow: hidden;
+}
+
+.roll-out {
+  position: absolute;
+}
+
+/* Scale ticks fill one after another, so a level reads as a movement. */
+.scale.filling i {
+  transition: background var(--t-fast) ease, height var(--t-fast) var(--ease-out);
+}
+
+/* A random draw shows candidates for a moment in muted ink before it settles. */
+.scrambling {
+  color: var(--muted);
+}
+
+/* ---------- Overlays ---------- */
+
+dialog[open] {
+  animation: dialog-in var(--t-base) var(--ease-out);
+}
+
+dialog[open]::backdrop {
+  animation: fade-in var(--t-base) ease-out;
+}
+
+dialog.palette[open] {
+  animation-name: palette-in;
+}
+
+dialog.closing {
+  animation: dialog-out var(--t-fast) ease-in forwards;
+}
+
+dialog.closing::backdrop {
+  animation: fade-out var(--t-fast) ease-in forwards;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+/* Toasts slide in from the edge, and a line under them shows how long they stay; pointing at one holds it. */
+.toast {
+  position: relative;
+  overflow: hidden;
+  animation: toast-in var(--t-base) var(--ease-out);
+}
+
+.toast::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--ink);
+  opacity: 0.45;
+  transform-origin: left;
+  animation: countdown var(--toast-life, 4s) linear forwards;
+}
+
+.toast.error::after {
+  background: var(--signal);
+  opacity: 0.8;
+}
+
+.toast:hover::after {
+  animation-play-state: paused;
+}
+
+.toast.leaving {
+  animation: toast-out var(--t-fast) ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes countdown {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.scrim {
+  animation: fade-in var(--t-base) ease-out;
+}
+
+/* The agent panel comes in from the edge it lives on. */
+.app.agent-docked .agent {
+  animation: panel-in var(--t-base) var(--ease-out);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+/* ---------- Omni Agent conversation ---------- */
+
+/* Messages arrive from their speaker's side. */
+.msg {
+  animation: msg-in var(--t-base) var(--ease-out) both;
+}
+
+.msg-user {
+  animation-name: msg-in-right;
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes msg-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+/* Each step slides into the list; while it runs, a short ink line travels under it, and its dot fills when done. */
+.steps li {
+  animation: rise var(--t-base) var(--ease-out) both;
+}
+
+.steps li:not(.done):not(.failed)::after {
+  content: "";
+  position: absolute;
+  left: var(--s3);
+  bottom: 0;
+  width: 40px;
+  height: 2px;
+  border-radius: var(--r-tick);
+  background: var(--ink);
+  animation: working 900ms var(--ease-out) infinite;
+}
+
+/* A step waiting for your approval is not working, so its line stops. */
+.steps li:has(.approval)::after {
+  display: none;
+}
+
+@keyframes working {
+  from {
+    transform: translateX(0);
+    opacity: 0.7;
+  }
+  to {
+    transform: translateX(140px);
+    opacity: 0;
+  }
+}
+
+.steps li.done::before,
+.steps li.failed::before {
+  animation: dot-done var(--t-base) var(--ease-swing);
+}
+
+@keyframes dot-done {
+  from {
+    transform: scale(0.3);
+  }
+}
+
+/* A decision is waiting: a red ring closes in on the approval card once. */
+.approval {
+  animation: rise var(--t-base) var(--ease-out) both, ask var(--t-slow) var(--ease-out) var(--t-base);
+}
+
+@keyframes ask {
+  from {
+    outline: 2px solid var(--signal);
+    outline-offset: 10px;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: 1px;
+  }
+}
+
+/* ---------- Games and timers ---------- */
+
+/* 2048: tiles slide to their new cells (in script), merges pop, and the new tile grows in after the slide. */
+.tile.merged {
+  animation: tile-pop var(--t-base) var(--ease-swing);
+}
+
+.tile.spawned {
+  animation: tile-spawn var(--t-base) var(--ease-out) 110ms both;
+}
+
+@keyframes tile-pop {
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes tile-spawn {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+/* Minesweeper: cells open outward from the one you clicked; hitting a mine shakes the board once. */
+.mines button.revealed {
+  animation: cell-open var(--t-base) var(--ease-out) both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes cell-open {
+  from {
+    opacity: 0.3;
+    transform: scale(0.82);
+  }
+}
+
+.mines.lost {
+  animation: shake 340ms ease-in-out;
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+/* A timer that reaches zero pulses three times, then rests. */
+.alarm {
+  animation: alarm 520ms ease-in-out 3;
+}
+
+@keyframes alarm {
+  50% {
+    transform: scale(1.04);
+    color: var(--signal);
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+
+  .toast::after,
+  .steps li:not(.done):not(.failed)::after {
+    display: none;
+  }
+}

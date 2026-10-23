@@ -1,4 +1,4 @@
-// Offline mode for Omni Agent: turns short commands into OmniTool tool runs, without a model. Labeled as limited.
+// Onyx's command layer: turns short commands into OmniTool tool runs, without a model.
 (function () {
 	'use strict';
 
@@ -41,11 +41,14 @@
 		throw new Error(Omni.edition === 'desktop' ? 'No code found: open a file in LabsCode or type some in Code Pad (No. 002).' : 'Code Pad (No. 002) is empty. Paste some code there first.');
 	}
 
-	/* Each rule: [pattern, handler(match, api, turn)]. Order matters: specific before general. */
+	// Guards keep conversation out of the tools: "what is a UUID" is a question, "I forgot my password" is not a request.
+	const QUESTION = /^(?:what(?: is| are| does)|whats|define|explain|meaning of|tell me about)\b/i;
+	const MAKING = /\b(generate|make|create|give|get|need|want|new|random|some|another|more)\b|\d/i;
+	const making = (m) => !QUESTION.test(m.input.trim()) || MAKING.test(m.input.replace(/^\s*what\s+is\s+/i, ''));
+	const notQuestion = (m) => !(QUESTION.test(m.input.trim()) && /\b(an?|the)\s+\w+\s*\??$|^\W*\w+(?:\s+\w+)?\s+\w+\s*\??$/i.test(m.input.trim()));
+
+	/* Each rule: [pattern, handler(match, api, turn), guard(match)?]. Order matters: specific before general. */
 	const rules = [
-		[/^(help|\?|what can you do|commands)\b/i, async (m, api, turn) => {
-			await turn.markdown(HELP);
-		}],
 		[/\b(?:save|write|store|export|download|put)\b(?:.*?\b(?:to|as|in|into)\b\s+(?:a\s+)?(?:new\s+)?(?:text\s+)?(?:file\s*)?(?:called\s+|named\s+)?(["']?[\w\-. \\/:]+?["']?))?\s*$/i, async (m, api, turn) => {
 			if (!lastText) throw new Error('There is nothing to save yet. Ask for something first, for example "generate 10 UUIDs and save them to a file".');
 			let name = unquote(m[1] || '').trim();
@@ -58,20 +61,20 @@
 			const word = m[2].toLowerCase().replace(/\s/g, '');
 			const kind = /7/.test(word) ? 'uuid7' : word.startsWith('ulid') ? 'ulid' : word.startsWith('nano') ? 'nanoid' : 'uuid4';
 			await runTool(api, turn, 'id-generator', { kind, count: Math.min(1000, num(m[1], 1)) });
-		}],
+		}, making],
 		[/\bpassphrases?\b/i, async (m, api, turn) => {
 			const words = (m.input.match(/(\d+)\s*words?/i) || [])[1];
 			await runTool(api, turn, 'passphrase', { words: num(words, 5), count: num((m.input.match(/(\d+)\s*passphrases/i) || [])[1], 1) });
-		}],
+		}, making],
 		[/\b(\d+)?\s*(?:strong\s+|random\s+)?passwords?\b/i, async (m, api, turn) => {
 			const len = (m.input.match(/(\d+)\s*(?:chars?|characters|long|length)/i) || [])[1];
 			await runTool(api, turn, 'password', { count: Math.min(100, num(m[1] && !len ? m[1] : (m.input.match(/(\d+)\s*passwords/i) || [])[1], 1)), length: num(len, 20) });
-		}],
+		}, (m) => /\b(generate|make|create|give|get|need|new|random|strong)\b|\d/i.test(m.input) && !/\b(forgot|forget|reset|change|my|strength|check|how strong|secure|hack|leak)\b/i.test(m.input)],
 		[/\b(lorem|ipsum|placeholder text|dummy text)\b/i, async (m, api, turn) => {
 			const n = (m.input.match(/(\d+)\s*(paragraphs?|sentences?|words?)/i) || []);
 			await runTool(api, turn, 'lorem', { count: num(n[1], 2), unit: n[2] ? n[2].toLowerCase().replace(/s$/, '') + 's' : 'paragraphs' });
-		}],
-		[/\broll\b\s*(?:an?\s+)?((?:\d*d\d+(?:\s*[+-]\s*\d+)?(?:kh\d+|kl\d+)?\s*)+|dice|die)?/i, async (m, api, turn) => {
+		}, making],
+		[/\broll\b\s*(?:an?\s+|the\s+|some\s+)?((?:\d*d\d+(?:\s*[+-]\s*\d+)?(?:kh\d+|kl\d+)?\s*)+|dice|die)/i, async (m, api, turn) => {
 			const notation = m[1] && /d/i.test(m[1]) && !/^(dice|die)$/i.test(m[1].trim()) ? m[1].trim() : '1d6';
 			await runTool(api, turn, 'dice', { notation });
 		}],
@@ -82,16 +85,13 @@
 			const count = (m.input.match(/(\d+)\s+random/i) || [])[1];
 			await runTool(api, turn, 'random-number', { min: num(m[1], 1), max: num(m[2], 100), count: num(count, 1) });
 		}],
-		[/\b([A-Za-z]{3})\s+(?:to|in|into)\s+([A-Za-z]{3})\b/, async (m, api, turn, next) => {
+		[/\b([A-Za-z]{3})\s+(?:to|in|into)\s+([A-Za-z]{3})\b/, async (m, api, turn) => {
 			const amount = (m.input.match(/(-?[\d.,]+)/) || [])[1];
-			if (!Omni.byId.currency || !/^(usd|eur|gbp|jpy|cad|aud|chf|cny|sek|nok|dkk|pln|czk|huf|inr|brl|mxn|zar|try|krw|sgd|hkd|nzd|ils|php|thb|idr|myr|ron|bgn|isk)$/i.test(m[1]) || !/^[a-z]{3}$/i.test(m[2])) return next();
 			await runTool(api, turn, 'currency', { amount: num(amount, 1), from: m[1].toUpperCase(), to: m[2].toUpperCase() });
-		}],
-		[/(-?[\d.,]+)\s*(°?\s?[a-zA-Z°µ/²³]+(?:\s[a-zA-Z]+)?)\s+(?:to|in|into|as)\s+(°?\s?[a-zA-Z°µ/²³]+(?:\s[a-zA-Z]+)?)\s*\??$/i, async (m, api, turn, next) => {
-			const to = m[3].trim().toLowerCase();
-			if (/^(binary|bin|hex|hexadecimal|octal|oct|decimal|dec|base\s?\d+)$/.test(to)) return next();
+		}, (m) => !!Omni.byId.currency && CURRENCIES.test(m[1]) && CURRENCIES.test(m[2])],
+		[/(-?[\d.,]+)\s*(°?\s?[a-zA-Z°µ/²³]+(?:\s[a-zA-Z]+)?)\s+(?:to|in|into|as)\s+(°?\s?[a-zA-Z°µ/²³]+(?:\s[a-zA-Z]+)?)\s*\??$/i, async (m, api, turn) => {
 			await runTool(api, turn, 'unit-converter', { value: num(m[1].replace(/,/g, ''), 0), from: m[2].trim(), to: m[3].trim() });
-		}],
+		}, (m) => !/^(binary|bin|hex|hexadecimal|octal|oct|decimal|dec|base\s?\d+)$/.test(m[3].trim().toLowerCase())],
 		[/\b(-?(?:0x[\da-f]+|0b[01]+|0o[0-7]+|\d+))\s+(?:in|to|as|into)\s+(binary|bin|hex|hexadecimal|octal|oct|decimal|dec)\b/i, async (m, api, turn) => {
 			const target = { binary: '2', bin: '2', hex: '16', hexadecimal: '16', octal: '8', oct: '8', decimal: '10', dec: '10' }[m[2].toLowerCase()];
 			let v = m[1].toLowerCase();
@@ -108,12 +108,12 @@
 			const key = { md5: 'MD5', sha1: 'SHA-1', sha256: 'SHA-256', sha384: 'SHA-384', sha512: 'SHA-512', crc32: 'CRC32' }[algo];
 			const hit = r.result.find((b) => key in b);
 			if (hit) lastText = String(hit[key]);
-		}],
+		}, notQuestion],
 		[/\bbase-?64\b/i, async (m, api, turn) => {
 			const decode = /\bdecode\b/i.test(m.input);
 			const text = unquote(m.input.replace(/\b(base-?64|encode|decode|as|in|to|from|the|text|string)\b/gi, ' ').replace(/\s+/g, ' ').trim());
 			await runTool(api, turn, 'base64', { text, mode: decode ? 'decode' : 'encode' });
-		}],
+		}, notQuestion],
 		[/\burl[- ]?(encode|decode)\b\s*(.+)$/i, async (m, api, turn) => {
 			await runTool(api, turn, 'url-encoder', { text: unquote(m[2]), mode: m[1].toLowerCase(), scope: 'component' });
 		}],
@@ -123,13 +123,13 @@
 		[/\b(timestamp|epoch|unix time)\b/i, async (m, api, turn) => {
 			const value = (m.input.match(/\b(\d{9,13})\b/) || [])[1];
 			await runTool(api, turn, 'timestamp', { input: value || 'now' });
-		}],
-		[/\b(explain|outline|summari[sz]e|describe)\b.*\b(code|file|script|this)\b/i, async (m, api, turn) => {
+		}, (m) => !(QUESTION.test(m.input.trim()) && /\b(an?)\b/i.test(m.input))],
+		[/\b(explain|outline|summari[sz]e|describe)\b.*\b(code|file|script|function)\b/i, async (m, api, turn) => {
 			const code = await readCode(api, turn);
 			const out = await runTool(api, turn, 'code-explainer', { code: code.text, language: code.lang || 'auto' });
 			await turn.markdown(`Offline outline of **${code.name || 'the code'}**:\n\n${plainText(out.result)}`);
 		}],
-		[/\b(find bugs|bugs?|review|lint|problems)\b.*\b(code|file|script|this)?\b/i, async (m, api, turn) => {
+		[/\b(?:(?:find|check|look for|spot|any)\b.*\b(?:bugs?|issues|problems|errors)|review|lint)\b.*\b(code|file|script)\b/i, async (m, api, turn) => {
 			const code = await readCode(api, turn);
 			const out = await runTool(api, turn, 'bug-finder', { code: code.text, language: code.lang || 'auto' });
 			await turn.markdown(`Offline checks for **${code.name || 'the code'}**:\n\n${plainText(out.result)}`);
@@ -141,11 +141,15 @@
 			const hit = Omni.fuzzy.searchTools(m[1], Omni.sortedTools())[0];
 			if (!hit) throw new Error(`No tool matches "${m[1]}".`);
 			await api.execute(turn, 'open_tool', { tool_id: hit.tool.id });
+		}, (m) => {
+			const hit = Omni.fuzzy.searchTools(m[1], Omni.sortedTools())[0];
+			return !!hit && hit.score >= 90;
 		}],
 	];
+	const CURRENCIES = /^(usd|eur|gbp|jpy|cad|aud|chf|cny|sek|nok|dkk|pln|czk|huf|inr|brl|mxn|zar|try|krw|sgd|hkd|nzd|ils|php|thb|idr|myr|ron|bgn|isk)$/i;
 
 	const HELP = [
-		'**Offline mode understands short commands** (add an API key in Settings for open chat):',
+		'**Commands Onyx runs** with OmniTool\'s own tools:',
 		'- `generate 10 uuids` (also ULID, Nano ID, UUID v7), `5 passwords 24 characters`, `a passphrase`',
 		'- `convert 72 F to C`, `5 km to miles`, `100 USD to EUR`, `255 in hex`',
 		'- `sha256 hello`, `base64 encode hello`, `url encode a b&c`, `snake case Hello World`',
@@ -164,35 +168,40 @@
 			.filter(Boolean);
 	}
 
-	async function handle(text, api) {
-		const turn = api.addTurn('Omni Agent (offline)');
-		const parts = clauses(text);
+	/** Matches every part of a message to a command; null if any part isn't one (then it is conversation). */
+	function plan(text) {
+		const parts = clauses(String(text || ''));
+		if (!parts.length) return null;
+		const steps = [];
 		for (const part of parts) {
-			if (api.signal.aborted) return;
-			let handled = false;
-			for (let i = 0; i < rules.length && !handled; i++) {
-				const [re, fn] = rules[i];
+			const step = rules.map(([re, fn, guard]) => {
 				const m = part.match(re);
-				if (!m) continue;
-				let passed = false;
-				try {
-					await fn(m, api, turn, () => (passed = true));
-				} catch (err) {
-					turn.note(err.message || String(err), true);
-					return;
-				}
-				handled = !passed;
-			}
-			if (!handled) {
-				const near = Omni.fuzzy.searchTools(part, Omni.sortedTools()).slice(0, 3).map((r) => `No. ${r.tool.code} ${r.tool.name}`);
-				await turn.markdown(`Offline mode could not turn "${part}" into a command.${near.length ? ` Closest tools: ${near.join(', ')}.` : ''} Type **help** for the commands it knows, or add an API key in Settings for open questions.`);
-				return;
-			}
+				return m && (!guard || guard(m)) ? { part, m, fn } : null;
+			}).find(Boolean);
+			if (!step) return null;
+			steps.push(step);
 		}
-		if (lastText && parts.length && !/\b(save|write|store|export|download|put|help|open|explain|outline|bug|review|lint)\b/i.test(parts[parts.length - 1])) {
-			await turn.markdown('```\n' + lastText.slice(0, 4000) + (lastText.length > 4000 ? '\n...' : '') + '\n```');
-		}
+		return steps;
 	}
 
-	Omni.offline = { handle, clauses, plainText, reset: () => (lastText = null), HELP };
+	/** Runs a plan in the given turn, showing each tool step; the last result is shown unless the plan ended in a save. */
+	async function run(steps, api, turn) {
+		if (!steps) return '';
+		for (const step of steps) {
+			if (api.signal.aborted) return '';
+			try {
+				await step.fn(step.m, api, turn);
+			} catch (err) {
+				turn.note(err.message || String(err), true);
+				return '';
+			}
+		}
+		const last = steps[steps.length - 1].part;
+		if (lastText && !/\b(save|write|store|export|download|put|open|explain|outline|bug|review|lint)\b/i.test(last)) {
+			await turn.markdown('```\n' + lastText.slice(0, 4000) + (lastText.length > 4000 ? '\n...' : '') + '\n```');
+		}
+		return '';
+	}
+
+	Omni.offline = { plan, run, clauses, plainText, reset: () => (lastText = null), HELP };
 })();

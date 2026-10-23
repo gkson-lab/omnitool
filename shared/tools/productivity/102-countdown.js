@@ -14,6 +14,7 @@
 			t.rang = true;
 			changed = true;
 			Omni.alarm.notify('Timer done', `${t.name} (${Omni.util.fmt.duration(t.total)}) has finished.`);
+			Omni.alarm.flash(`[data-timer="${t.id}"]`);
 		}
 		if (changed) {
 			Omni.store.set(KEY, timers);

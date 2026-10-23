@@ -329,8 +329,8 @@
 		sendBtn.disabled = true;
 		stopBtn.hidden = false;
 		try {
-			if ((await Omni.ai.mode()) === 'claude') await runClaude(text);
-			else await Omni.offline.handle(text, { addTurn, execute, signal: controller.signal });
+			if ((await engine()) === 'claude') await runClaude(text);
+			else await Omni.onyx.handle(text, { addTurn, execute, signal: controller.signal, newChat });
 		} catch (err) {
 			const turn = addTurn('Omni Agent');
 			turn.note(Omni.ai.errorMessage(err), true);
@@ -350,27 +350,47 @@
 			introEl = null;
 		}
 	}
-	function intro() {
-		const examples = Omni.edition === 'desktop'
-			? ['Generate 10 UUIDs and save them to a file', 'Explain the file open in LabsCode', 'Convert 72 F to C', 'Hash hello with SHA-256']
-			: ['Generate 10 UUIDs and save them to a file', 'Explain the code in Code Pad', 'Convert 72 F to C', 'Hash hello with SHA-256'];
+	/** Which engine answers: Claude when there is a key (unless you picked Onyx), otherwise Onyx. */
+	async function engine() {
+		const hasKey = (await Omni.ai.mode()) === 'claude';
+		return hasKey && Omni.store.get('agent.engine', null) !== 'onyx' ? 'claude' : 'onyx';
+	}
+
+	async function intro() {
+		const onyx = (await engine()) === 'onyx';
+		if (introEl) introEl.remove();
+		const examples = onyx
+			? ['Hi Onyx', 'What can you do?', 'I need to format some JSON', 'Generate 10 UUIDs and save them to a file', 'Tell me a joke']
+			: Omni.edition === 'desktop'
+				? ['Generate 10 UUIDs and save them to a file', 'Explain the file open in LabsCode', 'Convert 72 F to C', 'Hash hello with SHA-256']
+				: ['Generate 10 UUIDs and save them to a file', 'Explain the code in Code Pad', 'Convert 72 F to C', 'Hash hello with SHA-256'];
+		if (logEl.querySelector('.msg')) return;
 		introEl = h(
 			'div',
 			{ class: 'stack' },
-			h('p', { class: 'muted', style: { fontSize: '0.9rem' } }, 'Ask for a result or a task. Omni Agent runs OmniTool\'s own tools and shows each step; anything that writes, deletes or edits waits for your approval.'),
+			h('p', { class: 'muted', style: { fontSize: '0.9rem' } }, onyx ? 'Onyx runs on this device, with no internet. Talk to it, ask about OmniTool, or give it a task; anything that writes or deletes waits for your approval.' : 'Ask for a result or a task. Claude runs OmniTool\'s own tools and shows each step; anything that writes, deletes or edits waits for your approval.'),
 			h('div', { class: 'stack' }, examples.map((ex) => h('button', { type: 'button', class: 'btn btn-small', style: { justifyContent: 'flex-start', whiteSpace: 'normal', textAlign: 'left' }, onclick: () => send(ex) }, ex))),
 		);
 		logEl.appendChild(introEl);
 	}
 
 	async function drawMode() {
-		const m = await Omni.ai.mode();
+		const hasKey = (await Omni.ai.mode()) === 'claude';
+		const e = await engine();
 		const s = Omni.ai.settings();
+		const choose = (value) => {
+			Omni.store.set('agent.engine', value);
+		};
+		const sw = h('div', { class: 'seg', role: 'group', 'aria-label': 'Omni Agent engine' },
+			h('button', { type: 'button', 'aria-pressed': String(e === 'onyx'), onclick: () => choose('onyx') }, 'Onyx'),
+			h('button', { type: 'button', 'aria-pressed': String(e === 'claude'), disabled: !hasKey, title: hasKey ? null : 'Add an Anthropic API key in Settings first', onclick: () => choose('claude') }, 'Claude'));
 		modeEl.replaceChildren(
-			...(m === 'claude'
-				? [h('b', null, 'Claude API'), ` · ${s.model} · effort ${s.effort === 'default' ? 'model default' : s.effort}`]
-				: [h('b', null, 'Offline mode (limited).'), ' Rule-based commands only, no open chat. ', h('a', { href: '#/settings' }, 'Add an API key'), ' to use Claude.']),
+			sw,
+			h('span', null, ...(e === 'claude'
+				? [h('b', null, 'Claude'), ` · ${s.model} · effort ${s.effort === 'default' ? 'model default' : s.effort}`]
+				: [h('b', null, 'Omni Agent - Onyx'), ' · on this device, no internet', ...(hasKey ? [] : [' · ', h('a', { href: '#/settings' }, 'add a key'), ' for Claude'])])),
 		);
+		intro();
 	}
 
 	function newChat() {
@@ -378,7 +398,7 @@
 		history = [];
 		logEl.replaceChildren();
 		intro();
-		Omni.offline && Omni.offline.reset && Omni.offline.reset();
+		if (Omni.onyx) Omni.onyx.reset();
 		input.focus();
 	}
 
@@ -406,7 +426,7 @@
 		]);
 		intro();
 		drawMode();
-		Omni.on('store', (e) => e.key && e.key.startsWith('ai.') && drawMode());
+		Omni.on('store', (e) => e.key && (e.key.startsWith('ai.') || e.key === 'agent.engine') && drawMode());
 		Omni.on('secrets', drawMode);
 	}
 

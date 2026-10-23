@@ -29,9 +29,25 @@
 	let toastBox;
 	function toast(message, opts) {
 		const o = opts || {};
+		const life = o.error ? 7000 : 4000;
 		const el = h('div', { class: 'toast' + (o.error ? ' error' : ''), role: o.error ? 'alert' : 'status' }, o.title ? h('strong', null, o.title + ' ') : null, message);
+		el.style.setProperty('--toast-life', life + 'ms');
 		toastBox.appendChild(el);
-		setTimeout(() => el.remove(), o.error ? 7000 : 4000);
+		// Pointing at a toast holds it, and its countdown line pauses with it.
+		let left = life;
+		let started = 0;
+		let timer;
+		const leave = () => Omni.motion.exit(el, 'leaving', () => el.remove());
+		const arm = () => {
+			started = Date.now();
+			timer = setTimeout(leave, left);
+		};
+		el.addEventListener('mouseenter', () => {
+			clearTimeout(timer);
+			left -= Date.now() - started;
+		});
+		el.addEventListener('mouseleave', arm);
+		arm();
 	}
 
 	function openDialog(build) {
@@ -39,10 +55,16 @@
 			const dlg = h('dialog', { 'aria-modal': 'true' });
 			let result;
 			const close = (value) => {
+				if (dlg.classList.contains('closing')) return;
 				result = value;
-				dlg.close();
+				Omni.motion.exit(dlg, 'closing', () => dlg.close());
 			};
 			build(dlg, close);
+			// Escape goes through the same path, so it gets the exit animation too.
+			dlg.addEventListener('cancel', (e) => {
+				e.preventDefault();
+				close(undefined);
+			});
 			dlg.addEventListener('close', () => {
 				dlg.remove();
 				overlayClosed();
@@ -120,10 +142,10 @@
 		];
 		const current = store.get('theme', 'system');
 		const buttons = opts.map(([v, label]) =>
-			h('button', { type: 'button', 'aria-pressed': String(v === current), onclick: () => {
+			h('button', { type: 'button', 'aria-pressed': String(v === current), onclick: (e) => Omni.motion.themeChange(e, () => {
 				store.set('theme', v);
 				applyTheme();
-			} }, label),
+			}) }, label),
 		);
 		// Every copy of the switch (sidebar, settings) follows the stored theme.
 		const off = Omni.on('theme', (t) => {
@@ -133,6 +155,11 @@
 		return h('div', { class: 'seg', role: 'group', 'aria-label': 'Theme' }, buttons);
 	}
 	Omni.themeSwitch = themeSwitch;
+	/** Sets the theme from code (Onyx's "dark mode"), with the same reveal as the switch. */
+	Omni.setTheme = (t) => Omni.motion.themeChange(null, () => {
+		store.set('theme', t);
+		applyTheme();
+	});
 
 	/* ---------- Layout ---------- */
 
@@ -225,7 +252,14 @@
 				}),
 			),
 		];
+		const counts = new Map([...nav.querySelectorAll('.nav-item')].map((a) => [a.getAttribute('href'), a.querySelector('.count') && a.querySelector('.count').textContent]));
 		nav.replaceChildren(...groups);
+		nav.querySelectorAll('.nav-item').forEach((a) => {
+			const c = a.querySelector('.count');
+			const was = counts.get(a.getAttribute('href'));
+			if (c && was != null && was !== c.textContent) Omni.motion.nudge(c, 'bump');
+		});
+		Omni.motion.marker(nav, nav.querySelector('[aria-current="page"]'), 'nav-marker');
 	}
 
 	/* ---------- Routing ---------- */
@@ -250,7 +284,64 @@
 		go('#/tool/' + encodeURIComponent(id));
 	};
 
+	const inView = (el) => {
+		if (!el) return false;
+		const r = el.getBoundingClientRect();
+		return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight;
+	};
+	const rowFor = (id) => {
+		const row = view.querySelector(`.catalog a[data-key="${CSS.escape(id)}"]`);
+		return inView(row) ? row : null;
+	};
+
+	/** Which elements morph between the page you leave and the one you open. */
+	function morphs(from, to) {
+		if (to.name === 'tool' && from.name !== 'tool') {
+			const row = rowFor(to.id);
+			if (!row) return {};
+			return {
+				before: [[row.querySelector('.no'), 'tool-no'], [row.querySelector('.name'), 'tool-name']],
+				after: () => {
+					const head = view.querySelector('.tool-head');
+					return head ? [[head.querySelector('.tool-no .code'), 'tool-no'], [head.querySelector('h1'), 'tool-name']] : [];
+				},
+			};
+		}
+		if (from.name === 'tool' && to.name !== 'tool') {
+			const head = view.querySelector('.tool-head');
+			if (!inView(head)) return {};
+			return {
+				before: [[head.querySelector('.tool-no .code'), 'tool-no'], [head.querySelector('h1'), 'tool-name']],
+				after: () => {
+					const row = rowFor(from.id);
+					return row ? [[row.querySelector('.no'), 'tool-no'], [row.querySelector('.name'), 'tool-name']] : [];
+				},
+			};
+		}
+		if (to.name === 'category') {
+			const item = nav.querySelector(`.nav-item[href="#/c/${CSS.escape(to.id)}"] span`);
+			if (!inView(item)) return {};
+			return { before: [[item, 'page-title']], after: () => [[view.querySelector('h1'), 'page-title']] };
+		}
+		return {};
+	}
+
+	/** The parts of a page that arrive in reading order. */
+	function enterParts(inner) {
+		const body = inner.querySelector('.tool-body');
+		if (body) return [inner.querySelector('.tool-head'), ...[...body.children].flatMap((c) => (c.classList.contains('io') ? [...c.children] : [c]))];
+		return [...inner.children].flatMap((c) => (c.children.length > 1 && !c.matches('.catalog, .tool-head, .home-search, .panel, form') ? [...c.children].slice(0, 4) : [c]));
+	}
+
 	function route() {
+		const from = state.route;
+		const r = parse(location.hash);
+		if (!from) return renderRoute(r);
+		const m = morphs(from, r);
+		Omni.motion.transition(() => renderRoute(r), { before: (m.before || []).filter(([el]) => el), after: () => (m.after ? m.after().filter(([el]) => el) : []) });
+	}
+
+	function renderRoute(r) {
 		if (state.cleanup) {
 			try {
 				state.cleanup();
@@ -259,7 +350,6 @@
 			}
 			state.cleanup = null;
 		}
-		const r = parse(location.hash);
 		state.route = r;
 		renderNav();
 		if (narrow() && state.menuOpen) setMenu(false);
@@ -278,6 +368,7 @@
 			console.error(err);
 			inner.replaceChildren(Omni.forms.stateBox('error', 'This page failed to load.', err.message));
 		}
+		if (!inner.classList.contains('flush')) Omni.motion.enter(enterParts(inner));
 		Omni.emit('route', r);
 		// Move focus to the new page's heading so screen readers announce it, unless the person is typing to the agent.
 		const heading = inner.querySelector('h1');
@@ -291,7 +382,7 @@
 		return h(
 			'ul',
 			{ class: 'catalog' },
-			tools.map((t) => h('li', null, h('a', { href: '#/tool/' + t.id }, h('span', { class: 'no' }, t.code), h('span', { class: 'name' }, t.name), h('span', { class: 'desc' }, t.description || '')))),
+			tools.map((t) => h('li', null, h('a', { href: '#/tool/' + t.id, 'data-key': t.id }, h('span', { class: 'no' }, t.code), h('span', { class: 'name' }, t.name), h('span', { class: 'desc' }, t.description || '')))),
 		);
 	}
 
@@ -320,6 +411,7 @@
 		const catalog = h('div');
 		const draw = () => {
 			const q = input.value.trim();
+			const settle = Omni.motion.flip(results, '.catalog a');
 			if (q) {
 				const hits = Omni.fuzzy.searchTools(q, all).slice(0, 24).map((r) => r.tool);
 				results.replaceChildren(hits.length ? section(`Matches for "${q}"`, hits.length, catalogRows(hits)) : Omni.forms.stateBox('empty', `No tool matches "${q}".`, 'Try a shorter word, a category name, or ask Omni Agent (Ctrl J).'));
@@ -328,6 +420,7 @@
 				results.replaceChildren();
 				catalog.hidden = false;
 			}
+			settle();
 		};
 		const editionNote = Omni.edition === 'web'
 			? `${all.length} tools in this web edition. The desktop edition adds ${150 - all.length} that need your computer, such as LabsCode, ping and the process viewer.`
@@ -398,13 +491,16 @@
 			pinBtn.replaceChildren(icon(on ? 'pinned' : 'pin'), on ? 'Pinned' : 'Pin');
 		};
 		pinBtn.onclick = () => {
-			togglePin(id);
+			const on = togglePin(id);
 			drawPin();
+			if (on) Omni.motion.nudge(pinBtn, 'pin-swing');
 		};
 		drawPin();
 		const body = h('div', { class: 'tool-body' });
+		const bar = h('div', { class: 'tool-bar' }, h('button', { type: 'button', 'aria-label': `Back to the top of ${tool.name}`, onclick: () => view.scrollTo({ top: 0, behavior: Omni.motion.ok() ? 'smooth' : 'auto' }) }, h('span', { class: 'no' }, `No. ${tool.code}`), h('span', null, tool.name), h('span', { class: 'up' }, 'Back to top')));
 		Omni.append(root, [
-			h('div', { class: 'tool-head' }, h('div', null, h('div', { class: 'tool-no' }, `No. ${tool.code} · ${Omni.category(tool.category).name}`), h('h1', null, tool.name), tool.description ? h('p', { class: 'tool-desc' }, tool.description) : null), h('div', { class: 'tool-actions' }, pinBtn)),
+			bar,
+			h('div', { class: 'tool-head' }, h('div', null, h('div', { class: 'tool-no' }, 'No. ', h('span', { class: 'code' }, tool.code), ` · ${Omni.category(tool.category).name}`), h('h1', null, tool.name), tool.description ? h('p', { class: 'tool-desc' }, tool.description) : null), h('div', { class: 'tool-actions' }, pinBtn)),
 			body,
 		]);
 		try {
@@ -413,6 +509,13 @@
 			console.error(err);
 			body.replaceChildren(Omni.forms.stateBox('error', `${tool.name} failed to open.`, err.message));
 		}
+		const watch = new IntersectionObserver(([e]) => bar.classList.toggle('shown', !e.isIntersecting && e.boundingClientRect.top < 0), { root: view });
+		watch.observe(root.querySelector('.tool-head'));
+		const toolCleanup = state.cleanup;
+		state.cleanup = () => {
+			watch.disconnect();
+			if (toolCleanup) toolCleanup();
+		};
 	}
 
 	/* ---------- Command palette ---------- */
@@ -428,13 +531,13 @@
 		const input = h('input', { type: 'text', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'palette-list', 'aria-autocomplete': 'list', 'aria-label': 'Find a tool or command', placeholder: 'Find a tool, or type ? to ask Omni Agent' });
 		const commands = [
 			{ label: 'Open settings', run: () => go('#/settings'), keywords: 'settings api key preferences' },
-			{ label: 'Switch theme', run: () => {
+			{ label: 'Switch theme', run: () => Omni.motion.themeChange(null, () => {
 				const order = ['system', 'light', 'dark'];
 				store.set('theme', order[(order.indexOf(store.get('theme', 'system')) + 1) % 3]);
 				applyTheme();
 				renderNav();
 				toast(`Theme: ${store.get('theme')}`);
-			}, keywords: 'dark light theme mode' },
+			}), keywords: 'dark light theme mode' },
 			{ label: 'Show or hide Omni Agent', run: () => toggleAgent(), keywords: 'agent ai chat assistant' },
 			{ label: 'Go to the catalog', run: () => go('#/'), keywords: 'home catalog all tools' },
 		];
@@ -452,25 +555,29 @@
 				if (lower) commands.filter((c) => c.label.toLowerCase().includes(lower) || c.keywords.includes(lower)).forEach((c) => items.push({ kind: 'command', ...c }));
 			}
 			selected = Math.min(selected, Math.max(0, items.length - 1));
+			const settle = Omni.motion.flip(list, 'li');
 			list.replaceChildren(
 				...(items.length
 					? items.map((it, i) =>
 						h(
 							'li',
-							{ role: 'option', id: 'pal-' + i, 'aria-selected': String(i === selected), onclick: () => choose(i), onmousemove: () => i !== selected && select(i) },
+							{ role: 'option', id: 'pal-' + i, 'data-key': it.kind === 'tool' ? it.tool.id : it.kind + ':' + it.label, 'aria-selected': String(i === selected), onclick: () => choose(i), onmousemove: () => i !== selected && select(i) },
 							it.kind === 'tool' ? [h('span', { class: 'no' }, it.tool.code), h('span', null, Omni.fuzzy.highlight(it.tool.name, it.indices)), h('span', { class: 'cat' }, Omni.category(it.tool.category).name)] : [h('span', { class: 'no' }, it.kind === 'ask' ? '?' : '>'), h('span', null, it.label), h('span', { class: 'cat' }, it.kind === 'ask' ? 'Omni Agent' : 'Command')],
 						),
 					)
 					: [h('li', { role: 'option', 'aria-disabled': 'true' }, h('span'), h('span', { class: 'muted' }, 'No matches. Start with ? to ask Omni Agent instead.'), h('span'))]),
 			);
 			input.setAttribute('aria-activedescendant', items.length ? 'pal-' + selected : '');
+			settle();
+			Omni.motion.marker(list, items.length ? list.querySelectorAll('li')[selected] : null, 'palette-marker');
 		};
 		const select = (i) => {
 			selected = i;
 			list.querySelectorAll('li').forEach((li, j) => li.setAttribute('aria-selected', String(j === i)));
 			input.setAttribute('aria-activedescendant', 'pal-' + i);
-			const li = list.children[i];
+			const li = list.querySelectorAll('li')[i];
 			if (li) li.scrollIntoView({ block: 'nearest' });
+			Omni.motion.marker(list, li, 'palette-marker');
 		};
 		let closeFn;
 		const choose = (i) => {

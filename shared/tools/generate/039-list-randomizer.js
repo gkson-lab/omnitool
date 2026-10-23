@@ -4,6 +4,10 @@ Omni.register({
 	id: 'list-randomizer',
 	name: 'List randomizer',
 	category: 'generate',
+	chance: (text, args) => {
+		const items = String(args.items || '').split('\n').map((x) => x.trim()).filter(Boolean);
+		return items.length && !text.includes('\n') ? items[Math.floor(Math.random() * items.length)] : text;
+	},
 	keywords: ['shuffle', 'random', 'pick', 'winner', 'raffle', 'teams', 'groups', 'draw'],
 	description: 'Shuffles a list, draws winners, or splits it into balanced teams.',
 	action: 'Randomize',

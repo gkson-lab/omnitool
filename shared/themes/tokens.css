@@ -40,6 +40,14 @@
   --t-view: 150ms;
   --t-drawer: 220ms;
   --t-pop: 120ms;
+
+  /* Motion (DESIGN.md, MOTION 3): parts slide along rails, ink lines draw, ticks fill. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-swing: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --t-fast: 120ms;
+  --t-base: 220ms;
+  --t-slow: 360ms;
+  --t-step: 40ms;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -90,5 +98,9 @@
     --t-view: 0ms;
     --t-drawer: 0ms;
     --t-pop: 0ms;
+    --t-fast: 0ms;
+    --t-base: 0ms;
+    --t-slow: 0ms;
+    --t-step: 0ms;
   }
 }

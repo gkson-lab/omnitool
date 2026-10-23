@@ -12,7 +12,7 @@ JSON, regex, hashes, unit and color conversion, a graphing calculator, a to-do l
 | Runs on | Windows 10 or 11, 64-bit (x64) | Any recent browser, phones included |
 | LabsCode | The real editor, docked in a tab | Code Pad, a lighter editor |
 | Install | Double-click `desktop\start.bat` | Open `web/index.html`. No server, no build. |
-| Omni Agent | Claude with your key, or offline mode | Same |
+| Omni Agent | Onyx on your device, or Claude with your key | Same |
 
 <p>
   <img src="docs/screenshots/graphing-dark.png" alt="The graphing calculator in dark mode, plotting two functions" width="66%">
@@ -48,7 +48,7 @@ If you downloaded OmniTool as a ZIP, Windows may warn that `start.bat` came from
 
 ### Omni Agent with Claude
 
-Optional. Claude mode needs an [Anthropic API key](https://console.anthropic.com), and **every request is billed to your Anthropic account**. The Effort setting trades depth for cost, and the default model is `claude-opus-5-5`. Without a key, the agent and AI tools run in a clearly labeled offline mode that costs nothing.
+Optional. Omni Agent works without it: its own engine, **Onyx**, runs on your device for free (see below). Claude mode needs an [Anthropic API key](https://console.anthropic.com), and **every request is billed to your Anthropic account**. The Effort setting trades depth for cost, and the default model is `claude-opus-5-5`.
 
 ## Quick start
 
@@ -84,7 +84,7 @@ flowchart TB
   subgraph shared["shared/: written once"]
     REG["Tool registry<br/>150 tool modules"]
     UI["Catalog, forms, palette,<br/>themes, results"]
-    AG["Omni Agent<br/>Claude or offline"]
+    AG["Omni Agent<br/>Onyx or Claude"]
   end
   WEB["web/index.html<br/>133 tools"] --> shared
   subgraph desk["desktop/: Electron 44"]
@@ -126,7 +126,17 @@ Claude never touches your files directly. It can only ask for one of the agent's
 
 **Before any write or delete, the agent stops and asks**, showing the path and, for an existing file, a diff. Deletes go to the Recycle Bin. File access is confined to `Documents\OmniTool Agent` and the folders open in LabsCode, and paths are resolved through links so `..\..\` can't escape.
 
-Without a key, an offline engine reads simple requests ("convert 5 miles to km", "sha256 of hello", "roll 3d6", "then save it") and chains the matching tools in order. The app labels its results as limited.
+### Onyx, the engine that runs on your device
+
+**Omni Agent - Onyx** is the agent's own engine, and the default whenever there's no API key; a switch at the top of the agent panel picks Onyx or Claude. It needs no internet, no account and no download, and its test confirms it makes zero network requests. It is deliberately small:
+
+- **Talks**: greetings, how you're doing, jokes, tips, a few facts. It remembers your name, and anything you say "remember that..." about, on this device only; "forget me" clears it.
+- **Answers OmniTool questions**: "how do I add an API key", "is my data private", "keyboard shortcuts", and short definitions like "what is a JWT".
+- **Finds tools**: "I need to pretty print some JSON" offers the JSON formatter.
+- **Runs commands**: "generate 10 uuids and save them to a file", "convert 72 F to C", "what is 12 times 7", "roll 2d6". It asks before saving anything.
+- **Can't**: write essays or code, look things up online, or answer general knowledge questions. It says so instead of guessing.
+
+Under the hood it's an intent model (TF-IDF over 573 example phrases for 55 intents, typo-tolerant), with conversation state for follow-ups like "another one" and "yes". On 84 phrasings it was never shown, it picks the right intent 96.4% of the time. The standalone engine is published as [Onyx 1](https://github.com/gkson-lab/onyx).
 
 ### LabsCode inside a tab
 
@@ -138,6 +148,10 @@ LabsCode is a full VS Code fork, so OmniTool doesn't imitate it. It runs the rea
 4. On quit, OmniTool hands the window back and asks LabsCode to close. LabsCode's hot exit keeps unsaved files for next time.
 
 Inside LabsCode, the small **OmniTool Bridge** extension listens on `127.0.0.1` on a random port and answers only requests that carry a random token. It lets OmniTool read the active file, open files, and apply an edit you approved. If you typed in the file since the agent read it, the edit is refused.
+
+### How it moves
+
+OmniTool is animated on purpose, never for decoration ([DESIGN.md](DESIGN.md) gives the reason for each motion). A catalog row's number and name morph into the tool page's title, the page's parts arrive in reading order, the sidebar marker slides to where you went, changed numbers roll, fresh results get an ink line sweeping down them, and random draws scramble for a moment so a repeat result still visibly happens. Nothing moves on an idle screen, and your system's reduced-motion setting turns all of it off.
 
 ### Where your data lives
 
@@ -195,6 +209,8 @@ The tests drive the real app through the Chrome DevTools Protocol and need only 
 | `node tests/click-all.js` | Clicks every button of every web tool and gives every file input a real image |
 | `node tests/desktop-deep.js` | The native side: processes, DNS, ping, git, scripts, the agent's file limits, the file server, clipboard, screen capture, LabsCode bridge |
 | `node tests/agent-mock.js web` (or `desktop`) | Claude mode against a local stand-in for the API, with no key and no network |
+| `node tests/onyx.js` | Onyx: intent accuracy on 84 held-out phrasings, a 32-step conversation, the agent panel, and zero network requests |
+| `node tests/motion.js` | Every animation fires and finishes, nothing loops on an idle screen, and reduced motion turns it all off |
 
 The latest results, tool by tool, are in [FEATURES.md](FEATURES.md#test-log).
 

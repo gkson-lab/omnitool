@@ -7,12 +7,33 @@
 	/* ---------- Output building blocks ---------- */
 
 	function copyButton(getText, label) {
-		return h(
+		const text = h('span', null, 'Copy');
+		let timer;
+		const btn = h(
 			'button',
-			{ type: 'button', class: 'btn btn-small btn-quiet copy', onclick: () => copy(typeof getText === 'function' ? getText() : getText), 'aria-label': label || 'Copy' },
+			{
+				type: 'button',
+				class: 'btn btn-small btn-quiet copy',
+				'aria-label': label || 'Copy',
+				onclick: async () => {
+					const ok = await copy(typeof getText === 'function' ? getText() : getText);
+					if (ok === false) return;
+					// The button itself confirms the copy for a moment, right where you clicked.
+					clearTimeout(timer);
+					btn.classList.add('copied');
+					btn.replaceChildren(icon('check'), text);
+					text.textContent = 'Copied';
+					timer = setTimeout(() => {
+						btn.classList.remove('copied');
+						btn.replaceChildren(icon('copy'), text);
+						text.textContent = 'Copy';
+					}, 1400);
+				},
+			},
 			icon('copy'),
-			h('span', null, 'Copy'),
+			text,
 		);
+		return btn;
 	}
 
 	/** The gklabs scale: 20 ticks, filled to `value` (0 to 1). */
@@ -130,7 +151,9 @@
 		}
 	}
 
-	function renderOutput(result, container) {
+	/** opts.fresh: the user pressed the button (not a live update); opts.chance: the tool draws at random. */
+	function renderOutput(result, container, opts) {
+		const before = Omni.motion ? Omni.motion.capture(container) : null;
 		container.replaceChildren();
 		const blocks = normalize(result);
 		if (!blocks.length) {
@@ -141,6 +164,7 @@
 			const el = renderBlock(b);
 			if (el) container.appendChild(el);
 		});
+		if (Omni.motion) Omni.motion.landed(container, before, opts);
 	}
 
 	/** Plain-JSON version of a result for Omni Agent; large text is cut so a tool can't flood the model. */
@@ -358,7 +382,7 @@
 			Omni.store.set('inputs.' + tool.id, v);
 		};
 
-		const run = async () => {
+		const run = async (fresh) => {
 			const mine = ++runId;
 			const args = values();
 			persist();
@@ -368,7 +392,7 @@
 				const result = await tool.run(args, { ...ctx, output });
 				if (mine !== runId) return;
 				clearTimeout(slow);
-				renderOutput(result, output);
+				renderOutput(result, output, { fresh: fresh === true, chance: tool.chance && (typeof tool.chance === 'function' ? (text) => tool.chance(text, args) : true) });
 			} catch (err) {
 				if (mine !== runId) return;
 				clearTimeout(slow);
@@ -391,7 +415,7 @@
 				novalidate: true,
 				onsubmit: (e) => {
 					e.preventDefault();
-					run();
+					run(true);
 				},
 			},
 			h('div', { class: 'fields' }, fields.map((f) => f.el)),
@@ -406,7 +430,7 @@
 		form.addEventListener('keydown', (e) => {
 			if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
 				e.preventDefault();
-				run();
+				run(true);
 			}
 		});
 
