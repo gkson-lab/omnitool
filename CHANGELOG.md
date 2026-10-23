@@ -26,11 +26,12 @@ First release.
 - **The JavaScript console did nothing on desktop.** The desktop window's content security policy blocks `eval` in the page, so the console now runs code in a worker loaded from `shared/core/js-worker.js`.
 - **The currency converter failed.** api.frankfurter.app now redirects to a host that sends no CORS header, so the browser blocked the answer. The tool calls api.frankfurter.dev directly.
 - **A clean install could stop after downloading LabsCode.** On a clean machine, Windows refused to rename the freshly unpacked folder (`EPERM`). The archive now unpacks in place and a marker file is written last, so an interrupted unpack is detected and redone.
+- **Claude Code in the LabsCode tab could not start.** Its panel said "The Claude Code program for this computer, the Windows (win32-x64) build, could not be found. The installed extension holds the Linux build instead." The `labscode-beta-9` Windows zip bundles the Linux build of the Claude Code extension (LabsCode bug 11 below). start.bat now spots a Claude Code folder built for another platform in OmniTool's copy of LabsCode, downloads the win32-x64 build from Open VSX, uninstalls the wrong one and installs it. If that fails (no network, for example), LabsCode still starts and the next start.bat tries again. The detection and the uninstall, install and retry steps were tested with the network and the LabsCode CLI stubbed out; the swap has not yet been run in a real Windows copy.
 - **Some tools scrolled sideways on phones.** The function plotter and notes kept their side panels beside the main area at every width; tools with a side panel now stack it below 760 px of tool width.
 
 ## LabsCode bugs found and fixed
 
-OmniTool installs these fixes into its own copy of LabsCode (a fixed LabsCode Extras 1.0.2 replaces the built-in 1.0.0). The same changes are in `desktop/labscode/fork-fixes/labscode-fixes.patch` for the LabsCode repository; it applies with `git apply` to the files in `labscode-beta-9`.
+OmniTool installs these fixes into its own copy of LabsCode (a fixed LabsCode Extras 1.0.2 replaces the built-in 1.0.0, and the Windows build of Claude Code replaces the Linux one). The same changes are in `desktop/labscode/fork-fixes/labscode-fixes.patch` for the LabsCode repository; it applies with `git apply` to the files in `labscode-beta-9`.
 
 Each entry says how it was confirmed: **tested** means it was reproduced or measured in a running LabsCode, **read** means it was found by reading the code and the fix has not been exercised in a running copy.
 
@@ -65,6 +66,10 @@ Measured with the WCAG 2 contrast formula. Normal text needs 4.5:1; borders and 
 8. **install-deps.bat could not elevate from some folders** (read). The script path was pasted inside single quotes in a PowerShell command, so a folder name containing an apostrophe broke the "run as administrator" step. The path now goes through an environment variable.
 9. **install-deps.bat failed at the end on a fresh machine** (read). It called Chocolatey's `RefreshEnv.cmd` without checking it exists, then ran `npm install -g @anthropic-ai/claude-code` even when npm was not on PATH yet, and reinstalled Claude Code when it was already there. Each step now checks first and says what it skipped.
 10. **labscode.bat and labscode.sh said "LabsCode Lite"** (read). Both scripts ship with the full edition too; the comments now say so.
+
+### Release workflow (`.github/workflows/lite-build.yml`)
+
+11. **The Windows zip bundled the Linux build of Claude Code** (seen in OmniTool's LabsCode tab). The workflow asked Open VSX for `anthropic/claude-code/latest` without naming a platform, which answers with the Linux build, on the Windows leg as well. The Windows CLI installed it without complaint, so `LabsCode-win32-x64.zip` shipped `anthropic.claude-code-*-linux-x64` and Claude Code reported that its Windows program could not be found. The workflow now asks for `anthropic/claude-code/<target>/latest`, stops if Open VSX answers with another platform, and checks the installed folder name before zipping.
 
 ## Notes on LabsCode behavior OmniTool works around
 

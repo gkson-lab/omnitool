@@ -1,4 +1,4 @@
-# OmniTool
+# OmniTool - developed by gksonlabs
 
 **150 developer and everyday tools in one window**, with the full LabsCode editor built in and an AI assistant, Omni Agent, that can run the tools for you.
 
@@ -31,7 +31,7 @@ Read this first. The desktop edition downloads a full code editor and a browser 
 | **First-run download** | **About 580 MB**: LabsCode 384 MB, Electron 151 MB, Node.js 36 MB (skipped if Node.js 18 or newer is already installed), packages about 6 MB. Later starts download nothing. |
 | **Disk space** | **Keep at least 2.5 GB free for the first run.** After setup OmniTool uses about 1.4 GB: LabsCode 769 MB, Electron and koffi 385 MB, download caches about 160 MB, Node.js 94 MB if it was downloaded. LabsCode's own data folder (settings, extensions, caches, logs) starts small and grows as you use it; after a day of testing it was about 300 MB. |
 | **Memory** | **8 GB of RAM if you use the LabsCode tab, 4 GB without it.** Measured: OmniTool on its own used about 0.25 GB of private memory; LabsCode used about 1.3 GB right after it opened, with no folder open. |
-| **Internet** | Needed for the first run (nodejs.org, the npm registry, github.com) and for the tools that call outside services (listed under [Privacy](#where-your-data-lives)). Everything else works offline. |
+| **Internet** | Needed for the first run (nodejs.org, the npm registry, github.com, open-vsx.org) and for the tools that call outside services (listed under [Privacy](#where-your-data-lives)). Everything else works offline. |
 | **Permissions** | **No administrator rights.** Nothing is installed outside the OmniTool folder; to remove it, delete the folder. |
 | **Screen** | The window can shrink to 360 x 480. |
 | **Time** | A few minutes on the first run, depending on your connection. Later starts take seconds. |
@@ -62,7 +62,7 @@ Then double-click `omnitool\desktop\start.bat`. It works in four steps:
 
 1. **Node.js.** Uses yours if it is version 18 or newer. Otherwise it downloads Node.js 24.21.0 into `desktop\runtime\node` and checks it against the SHA-256 checksum nodejs.org publishes.
 2. **Packages.** Installs Electron 44.6.0 and koffi 3.3.2 into `desktop\app\node_modules` from the lockfile (`npm ci`), with npm's and Electron's caches kept in `desktop\runtime`.
-3. **LabsCode.** Downloads the `labscode-beta-9` release from [gkson-lab/labscode](https://github.com/gkson-lab/labscode), unpacks it into `desktop\vendor\labscode`, installs the fixed LabsCode Extras and the OmniTool Bridge, and sets the window options docking needs. An interrupted download resumes on the next run. If this step fails, OmniTool still starts and the LabsCode tab can try again.
+3. **LabsCode.** Downloads the `labscode-beta-9` release from [gkson-lab/labscode](https://github.com/gkson-lab/labscode), unpacks it into `desktop\vendor\labscode`, installs the fixed LabsCode Extras and the OmniTool Bridge, replaces the Linux build of Claude Code that `labscode-beta-9` shipped with the Windows build from Open VSX, and sets the window options docking needs. An interrupted download resumes on the next run. If this step fails, OmniTool still starts and the LabsCode tab can try again.
 4. **Start.** Opens OmniTool.
 
 If something fails, start.bat says what went wrong and what to try, and waits for a key press so the window doesn't vanish.
