@@ -80,7 +80,7 @@ If something fails, start.bat says what went wrong and what to try, and waits fo
 ### One catalog, two editions
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph shared["shared/: written once"]
     REG["Tool registry<br/>150 tool modules"]
     UI["Catalog, forms, palette,<br/>themes, results"]
