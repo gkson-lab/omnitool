@@ -13,6 +13,14 @@ const RELEASE = {
 };
 const DOWNLOAD_URL = `https://github.com/gkson-lab/labscode/releases/download/${RELEASE.tag}/${RELEASE.asset}`;
 
+// Claude Code is published as one build per platform. labscode-beta-9 bundled the Linux build in its Windows zip,
+// so its chat panel said the Windows (win32-x64) program could not be found; setup swaps in the Windows build.
+const CLAUDE_CODE = {
+	id: 'anthropic.claude-code',
+	platform: 'win32-x64',
+	metaUrl: 'https://open-vsx.org/api/anthropic/claude-code/win32-x64/latest',
+};
+
 // Settings OmniTool needs so LabsCode sits inside its tab: no window buttons of its own.
 const EMBED_SETTINGS = {
 	'window.titleBarStyle': 'custom',
@@ -34,6 +42,8 @@ function paths(desktopDir) {
 		extensionSources: path.join(desktopDir, 'labscode'),
 		build: path.join(data, 'build'),
 		marker: path.join(data, 'labscode-setup.json'),
+		// Portable LabsCode keeps installed (not built-in) extensions here.
+		userExtensions: path.join(app, 'data', 'extensions'),
 		bridgeFile: path.join(data, 'labscode-bridge.json'),
 		// Written last, after every file is unpacked, so an interrupted unpack never counts as installed.
 		complete: path.join(root, '.omnitool-complete'),
@@ -185,6 +195,21 @@ function copyDir(src, dest) {
 	}
 }
 
+/** Runs the LabsCode CLI and returns its combined output; throws unless it exits 0 and the output matches `expect`. */
+function runCli(p, args, expect, what) {
+	const res = spawnSync('cmd.exe', ['/d', '/s', '/c', `""${p.cli}" ${args}"`], {
+		windowsVerbatimArguments: true,
+		encoding: 'utf8',
+		windowsHide: true,
+		timeout: 180_000,
+	});
+	const output = `${res.stdout || ''}${res.stderr || ''}`;
+	if (res.status !== 0 || (expect && !expect.test(output))) {
+		throw new Error(`LabsCode could not ${what}: ${output.trim().slice(0, 500) || `exit ${res.status}`}`);
+	}
+	return output;
+}
+
 /** Installs OmniTool's fixed LabsCode Extras and the bridge; skips what the marker says is already current. */
 function installExtensions(p, log) {
 	const marker = readMarker(p);
@@ -204,19 +229,92 @@ function installExtensions(p, log) {
 		const vsix = path.join(p.build, `${name}-${version}.vsix`);
 		const { id } = packVsix(src, vsix);
 		log(`Installing ${id} ${version} into LabsCode`);
-		const res = spawnSync('cmd.exe', ['/d', '/s', '/c', `""${p.cli}" --install-extension "${vsix}" --force"`], {
-			windowsVerbatimArguments: true,
-			encoding: 'utf8',
-			windowsHide: true,
-			timeout: 180_000,
-		});
-		const output = `${res.stdout || ''}${res.stderr || ''}`;
-		if (res.status !== 0 || !/successfully installed/i.test(output)) {
-			throw new Error(`LabsCode could not install ${id}: ${output.trim().slice(0, 500) || `exit ${res.status}`}`);
-		}
+		runCli(p, `--install-extension "${vsix}" --force`, /successfully installed/i, `install ${id}`);
 		marker.extensions[name] = version;
 	}
 	return marker;
+}
+
+/** GETs a URL over HTTPS, following redirects, and resolves with the response stream. */
+function httpsGet(url, redirects = 0) {
+	return new Promise((resolve, reject) => {
+		const req = https.get(url, { headers: { 'User-Agent': 'OmniTool' } }, (res) => {
+			if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects < 8) {
+				res.resume();
+				resolve(httpsGet(new URL(res.headers.location, url).toString(), redirects + 1));
+				return;
+			}
+			if (res.statusCode !== 200) {
+				res.resume();
+				reject(new Error(`${new URL(url).host} answered ${res.statusCode} for ${url}`));
+				return;
+			}
+			resolve(res);
+		});
+		req.on('error', reject);
+		req.setTimeout(60_000, () => req.destroy(new Error(`No data from ${new URL(url).host} for 60 seconds`)));
+	});
+}
+
+async function fetchJson(url) {
+	const res = await httpsGet(url);
+	let text = '';
+	for await (const chunk of res) text += chunk;
+	return JSON.parse(text);
+}
+
+async function fetchToFile(url, file) {
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	const res = await httpsGet(url);
+	await new Promise((resolve, reject) => {
+		const out = fs.createWriteStream(file);
+		res.pipe(out);
+		res.on('error', reject);
+		out.on('error', reject);
+		out.on('finish', resolve);
+	});
+}
+
+/** Installed Claude Code folders that hold another platform's build, e.g. anthropic.claude-code-2.1.0-linux-x64. */
+function foreignClaudeCode(p) {
+	let names;
+	try {
+		names = fs.readdirSync(p.userExtensions);
+	} catch {
+		return [];
+	}
+	return names.filter((name) => {
+		const m = /^anthropic\.claude-code-.+-((?:win32|linux|alpine|darwin)-(?:x64|arm64|armhf))$/i.exec(name);
+		return m && m[1].toLowerCase() !== CLAUDE_CODE.platform;
+	});
+}
+
+/**
+ * Replaces a Claude Code extension built for another platform with the Windows build from Open VSX. Leaves Claude
+ * Code alone when it is missing (you may have uninstalled it) or already the Windows build.
+ */
+async function fixClaudeCode(p, log) {
+	const foreign = foreignClaudeCode(p);
+	if (!foreign.length) return;
+	log(`LabsCode came with Claude Code for the wrong platform (${foreign.join(', ')}). Getting the Windows build from Open VSX`);
+	const meta = await fetchJson(CLAUDE_CODE.metaUrl);
+	if (meta.targetPlatform !== CLAUDE_CODE.platform || !meta.files || !meta.files.download) {
+		throw new Error(`Open VSX offered the ${meta.targetPlatform || 'unknown'} build of Claude Code instead of ${CLAUDE_CODE.platform}.`);
+	}
+	const vsix = path.join(p.build, `claude-code-${meta.version}-${CLAUDE_CODE.platform}.vsix`);
+	await fetchToFile(meta.files.download, vsix);
+	// Uninstall first: the same version for another platform otherwise counts as already installed. An earlier run
+	// that failed after this step leaves it uninstalled already, which is fine.
+	try {
+		runCli(p, `--uninstall-extension ${CLAUDE_CODE.id}`, null, `remove the ${foreign.join(', ')} build of Claude Code`);
+	} catch (err) {
+		if (!/not installed/i.test(err.message)) throw err;
+	}
+	log(`Installing Claude Code ${meta.version} (${CLAUDE_CODE.platform}) into LabsCode`);
+	runCli(p, `--install-extension "${vsix}" --force`, /successfully installed/i, `install Claude Code ${meta.version}`);
+	fs.rmSync(vsix, { force: true });
+	// LabsCode deletes an uninstalled extension's folder on its next start; remove it now so the check above passes.
+	for (const name of foreign) fs.rmSync(path.join(p.userExtensions, name), { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
 }
 
 /** Adds any missing keys to a JSONC settings file without disturbing its comments. */
@@ -254,6 +352,12 @@ async function runSetup(desktopDir, { log = () => {}, onProgress } = {}) {
 		if (!isInstalled(p)) throw new Error('The LabsCode zip did not contain LabsCode\\LabsCode.exe.');
 	}
 	const marker = installExtensions(p, log);
+	try {
+		await fixClaudeCode(p, log);
+	} catch (err) {
+		// Everything else in LabsCode works without it, so this doesn't fail setup; the next start tries again.
+		log(`Claude Code in LabsCode still needs its Windows build: ${err.message}`);
+	}
 	prepareSettings(p);
 	marker.release = RELEASE.tag;
 	fs.mkdirSync(path.dirname(p.marker), { recursive: true });
@@ -261,4 +365,4 @@ async function runSetup(desktopDir, { log = () => {}, onProgress } = {}) {
 	return p;
 }
 
-module.exports = { RELEASE, DOWNLOAD_URL, paths, isInstalled, runSetup, packVsix, ensureSettings };
+module.exports = { RELEASE, DOWNLOAD_URL, paths, isInstalled, runSetup, packVsix, ensureSettings, foreignClaudeCode };
