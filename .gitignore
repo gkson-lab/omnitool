@@ -1,0 +1,10 @@
+# Installed by start.bat or by the app; never committed.
+desktop/app/node_modules/
+desktop/runtime/
+desktop/vendor/
+# Settings, the API key (encrypted), clipboard history and Electron's profile.
+desktop/data/
+# Self-test output.
+tests/shots/
+tests/downloads/
+tests/report-*.json

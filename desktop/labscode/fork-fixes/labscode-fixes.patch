@@ -1,0 +1,332 @@
+diff --git a/extensions/labscode-extras/extension.js b/extensions/labscode-extras/extension.js
+index 0451d55..4d38bf3 100644
+--- a/extensions/labscode-extras/extension.js
++++ b/extensions/labscode-extras/extension.js
+@@ -9,14 +9,17 @@ function focusTimer(context) {
+ 	const item = vscode.window.createStatusBarItem('labscode.focus', vscode.StatusBarAlignment.Right, 100);
+ 	item.name = 'LabsCode Focus Timer';
+ 	item.command = 'labscode.focus.toggle';
+-	let endAt = 0;
+-	let minutes = 0;
++	// The session end time is kept in globalState so a window reload doesn't cancel a running session.
++	let { endAt, minutes } = context.globalState.get('labscode.focus', { endAt: 0, minutes: 0 });
+ 	let tick;
+ 
++	// settings.json edits bypass the schema's minimum and maximum, so clamp here.
++	const sessionMinutes = () => Math.min(240, Math.max(1, Number(config().get('focus.minutes')) || 25));
++
+ 	const render = () => {
+ 		if (!endAt) {
+ 			item.text = '$(watch) Focus';
+-			item.tooltip = `Start a ${config().get('focus.minutes')}-minute focus session`;
++			item.tooltip = `Start a ${sessionMinutes()}-minute focus session`;
+ 			return;
+ 		}
+ 		const left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+@@ -24,15 +27,18 @@ function focusTimer(context) {
+ 		item.tooltip = 'Focus session running. Click to stop.';
+ 		if (left === 0) finish();
+ 	};
++	const persist = () => context.globalState.update('labscode.focus', { endAt, minutes });
+ 	const stop = () => {
+ 		clearInterval(tick);
+ 		endAt = 0;
++		persist();
+ 		render();
+ 	};
+ 	const start = () => {
+ 		clearInterval(tick);
+-		minutes = config().get('focus.minutes');
++		minutes = sessionMinutes();
+ 		endAt = Date.now() + minutes * 60_000;
++		persist();
+ 		tick = setInterval(render, 1000);
+ 		render();
+ 	};
+@@ -48,6 +54,7 @@ function focusTimer(context) {
+ 		vscode.commands.registerCommand('labscode.focus.toggle', () => (endAt ? stop() : start())),
+ 		vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('labscode.focus') && render()),
+ 	);
++	if (endAt) tick = setInterval(render, 1000);
+ 	render();
+ 	item.show();
+ }
+@@ -60,6 +67,7 @@ function editTally(context) {
+ 	const today = () => new Date().toLocaleDateString('en-CA');
+ 	let tally = context.globalState.get('labscode.tally', { date: today(), added: 0, removed: 0 });
+ 	let saveTimer;
++	let midnightTimer;
+ 
+ 	const render = () => {
+ 		if (tally.date !== today()) tally = { date: today(), added: 0, removed: 0 };
+@@ -71,20 +79,40 @@ function editTally(context) {
+ 		clearTimeout(saveTimer);
+ 		saveTimer = setTimeout(() => context.globalState.update('labscode.tally', tally), 2000);
+ 	};
++	// Without this the item kept showing yesterday's numbers until the first edit after midnight.
++	const scheduleMidnight = () => {
++		const next = new Date();
++		next.setHours(24, 0, 1, 0);
++		midnightTimer = setTimeout(() => {
++			render();
++			save();
++			scheduleMidnight();
++		}, next - Date.now());
++	};
+ 
+ 	context.subscriptions.push(
+ 		item,
+-		{ dispose: () => context.globalState.update('labscode.tally', tally) },
++		{ dispose: () => { clearTimeout(midnightTimer); context.globalState.update('labscode.tally', tally); } },
+ 		vscode.workspace.onDidChangeTextDocument((e) => {
+ 			if (!['file', 'untitled', 'vscode-userdata'].includes(e.document.uri.scheme)) return;
+ 			if (e.reason === vscode.TextDocumentChangeReason.Undo || e.reason === vscode.TextDocumentChangeReason.Redo) return;
+-			if (tally.date !== today()) tally = { date: today(), added: 0, removed: 0 };
++			let added = 0;
++			let removed = 0;
+ 			for (const change of e.contentChanges) {
+-				tally.removed += change.range.end.line - change.range.start.line;
+-				tally.added += change.text.split('\n').length - 1;
++				removed += change.range.end.line - change.range.start.line;
++				added += change.text.split('\n').length - 1;
+ 			}
+-			render();
+-			save();
++			if (!added && !removed) return;
++			// A reload from disk (git checkout, an external tool) leaves the file clean and is not an edit. isDirty lags
++			// one event behind (still false for the first edit after a save), so check it once it has caught up.
++			setTimeout(() => {
++				if (!e.document.isDirty) return;
++				if (tally.date !== today()) tally = { date: today(), added: 0, removed: 0 };
++				tally.added += added;
++				tally.removed += removed;
++				render();
++				save();
++			}, 300);
+ 		}),
+ 		vscode.commands.registerCommand('labscode.tally.reset', () => {
+ 			tally = { date: today(), added: 0, removed: 0 };
+@@ -93,6 +121,7 @@ function editTally(context) {
+ 		}),
+ 		vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('labscode.tally') && render()),
+ 	);
++	scheduleMidnight();
+ 	render();
+ }
+ 
+@@ -113,7 +142,7 @@ function scratchpad(context) {
+ 	);
+ }
+ 
+-/** Marks TODO, FIXME and HACK in light red so they don't get lost. */
++/** Marks TODO, FIXME and HACK in bold light red so they don't get lost. */
+ function redPen(context) {
+ 	const marker = vscode.window.createTextEditorDecorationType({
+ 		fontWeight: 'bold',
+@@ -123,15 +152,17 @@ function redPen(context) {
+ 		overviewRulerLane: vscode.OverviewRulerLane.Right,
+ 	});
+ 	const pattern = /\b(TODO|FIXME|HACK)\b/g;
++	// Every document edited since the last repaint; tracking only the latest one left the others stale.
++	const pendingDocs = new Set();
+ 	let pending;
+ 
+ 	const paint = (editor) => {
+ 		const doc = editor.document;
+-		if (!config().get('redPen.enabled') || doc.getText().length > 2_000_000) {
++		const text = doc.getText();
++		if (!config().get('redPen.enabled') || text.length > 2_000_000) {
+ 			editor.setDecorations(marker, []);
+ 			return;
+ 		}
+-		const text = doc.getText();
+ 		const ranges = [];
+ 		for (const m of text.matchAll(pattern)) {
+ 			ranges.push(new vscode.Range(doc.positionAt(m.index), doc.positionAt(m.index + m[0].length)));
+@@ -145,8 +176,12 @@ function redPen(context) {
+ 		{ dispose: () => clearTimeout(pending) },
+ 		vscode.window.onDidChangeVisibleTextEditors(paintVisible),
+ 		vscode.workspace.onDidChangeTextDocument((e) => {
++			pendingDocs.add(e.document);
+ 			clearTimeout(pending);
+-			pending = setTimeout(() => vscode.window.visibleTextEditors.filter((ed) => ed.document === e.document).forEach(paint), 200);
++			pending = setTimeout(() => {
++				vscode.window.visibleTextEditors.filter((ed) => pendingDocs.has(ed.document)).forEach(paint);
++				pendingDocs.clear();
++			}, 200);
+ 		}),
+ 		vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('labscode.redPen') && paintVisible()),
+ 	);
+diff --git a/extensions/labscode-extras/package.json b/extensions/labscode-extras/package.json
+index fe773f3..d3dda90 100644
+--- a/extensions/labscode-extras/package.json
++++ b/extensions/labscode-extras/package.json
+@@ -2,7 +2,7 @@
+   "name": "labscode-extras",
+   "displayName": "LabsCode Extras",
+   "description": "LabsCode Light and Dark themes, a focus timer, today's edit tally, a scratchpad and red-pen TODO markers.",
+-  "version": "1.0.0",
++  "version": "1.0.2",
+   "publisher": "gklabs",
+   "license": "MIT",
+   "engines": {
+@@ -72,7 +72,7 @@
+         "labscode.redPen.enabled": {
+           "type": "boolean",
+           "default": true,
+-          "description": "Underline TODO, FIXME and HACK markers in light red."
++          "description": "Show TODO, FIXME and HACK markers in bold light red."
+         }
+       }
+     }
+diff --git a/extensions/labscode-extras/themes/labscode-dark.json b/extensions/labscode-extras/themes/labscode-dark.json
+index 1a92cd9..fec6b81 100644
+--- a/extensions/labscode-extras/themes/labscode-dark.json
++++ b/extensions/labscode-extras/themes/labscode-dark.json
+@@ -15,7 +15,7 @@
+ 		"activityBarBadge.background": "#FF8A8A",
+ 		"browser.border": "#00000000",
+ 		"sideBarTitle.foreground": "#bfbfbf",
+-		"input.placeholderForeground": "#555555",
++		"input.placeholderForeground": "#8C8C8C",
+ 		"menu.background": "#0C0C0C",
+ 		"menu.foreground": "#bfbfbf",
+ 		"menu.separatorBackground": "#0F0F0F",
+@@ -121,7 +121,7 @@
+ 		"statusBarItem.hoverBackground": "#121212",
+ 		"statusBarItem.hoverForeground": "#FFFFFF",
+ 		"statusBar.debuggingBackground": "#F36868",
+-		"statusBar.debuggingForeground": "#FFFFFF",
++		"statusBar.debuggingForeground": "#000000",
+ 		"statusBar.focusBorder": "#F36868B3",
+ 		"statusBar.foreground": "#8C8C8C",
+ 		"statusBar.noFolderBackground": "#090909",
+diff --git a/extensions/labscode-extras/themes/labscode-light.json b/extensions/labscode-extras/themes/labscode-light.json
+index 9a165be..2b3864d 100644
+--- a/extensions/labscode-extras/themes/labscode-light.json
++++ b/extensions/labscode-extras/themes/labscode-light.json
+@@ -8,8 +8,8 @@
+ 		"editorGroupHeader.connectedTabsBackground": "#EAEAEA",
+ 		"editorGroupHeader.tabsBorder": "#F0F1F2",
+ 		"editor.inactiveSelectionBackground": "#E600001A",
+-		"editorIndentGuide.background1": "#FFFFFF40",
+-		"editorIndentGuide.activeBackground1": "#EEEEEE",
++		"editorIndentGuide.background1": "#D3D3D3",
++		"editorIndentGuide.activeBackground1": "#939393",
+ 		"editor.selectionHighlightBackground": "#E6000015",
+ 		"editorSuggestWidget.background": "#F47171",
+ 		"activityBarBadge.background": "#F87171",
+@@ -17,7 +17,7 @@
+ 		"sideBarTitle.foreground": "#202020",
+ 		"list.hoverBackground": "#00000014",
+ 		"menu.border": "#E4E5E6",
+-		"input.placeholderForeground": "#999999",
++		"input.placeholderForeground": "#6E6E6E",
+ 		"searchEditor.textInputBorder": "#CECECE",
+ 		"settings.textInputBorder": "#CECECE",
+ 		"settings.numberInputBorder": "#CECECE",
+@@ -27,8 +27,8 @@
+ 		"ports.iconRunningProcessForeground": "#369432",
+ 		"sideBarSectionHeader.background": "#F47171",
+ 		"sideBarSectionHeader.border": "#F0F1F2",
+-		"tab.selectedForeground": "#333333",
+-		"tab.inactiveForeground": "#606060",
++		"tab.selectedForeground": "#202020",
++		"tab.inactiveForeground": "#202020",
+ 		"tab.selectedBackground": "#F47171",
+ 		"tab.lastPinnedBorder": "#F0F1F2",
+ 		"notebook.cellBorderColor": "#E5E5E5",
+@@ -162,7 +162,7 @@
+ 		"titleBar.activeBackground": "#FFFFFF",
+ 		"titleBar.activeForeground": "#606060",
+ 		"titleBar.border": "#F0F1F2",
+-		"titleBar.inactiveForeground": "#606060",
++		"titleBar.inactiveForeground": "#202020",
+ 		"welcomePage.tileBackground": "#F3F3F3",
+ 		"disabledForeground": "#BBBBBB",
+ 		"button.secondaryBorder": "#EAEAEA",
+diff --git a/lite/install-deps.bat b/lite/install-deps.bat
+index 95d8cb4..b45870f 100644
+--- a/lite/install-deps.bat
++++ b/lite/install-deps.bat
+@@ -1,10 +1,13 @@
+ @echo off
+-rem LabsCode Lite: one-time setup of dev tools (Chocolatey, Node.js, Python, Rust, Git).
+-rem Must run as Administrator. Skips anything already installed.
++rem LabsCode: one-time setup of dev tools (Chocolatey, Node.js, Python, Rust, Git, Claude Code).
++rem Must run as Administrator. Skips each tool that already works, however it was installed.
++setlocal EnableExtensions
+ net session >nul 2>&1
+ if errorlevel 1 (
+ 	echo Requesting administrator rights...
+-	powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
++	rem The path goes through an environment variable so a quote in a folder name cannot break the command.
++	set "SELF=%~f0"
++	powershell -NoProfile -Command "Start-Process -FilePath $env:SELF -Verb RunAs"
+ 	exit /b
+ )
+ 
+@@ -15,15 +18,37 @@ if errorlevel 1 (
+ 	set "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
+ )
+ 
+-for %%P in (nodejs-lts python git rustup.install) do (
+-	echo Installing %%P...
+-	choco install %%P -y --no-progress
+-)
++call :ensure "node --version" nodejs-lts "Node.js"
++rem "python" can be the Microsoft Store shortcut, which exists but exits with 9009, so running it is the real test.
++call :ensure "python -V" python "Python"
++call :ensure "git --version" git "Git"
++call :ensure "rustup --version" rustup.install "Rust"
+ 
+-call "%ALLUSERSPROFILE%\chocolatey\bin\RefreshEnv.cmd"
+-echo Installing Claude Code CLI...
+-call npm install -g @anthropic-ai/claude-code
++if exist "%ALLUSERSPROFILE%\chocolatey\bin\RefreshEnv.cmd" call "%ALLUSERSPROFILE%\chocolatey\bin\RefreshEnv.cmd"
++where claude >nul 2>&1
++if errorlevel 1 (
++	where npm >nul 2>&1
++	if errorlevel 1 (
++		echo Skipping Claude Code CLI: npm is not on PATH yet. Run this again after restarting.
++	) else (
++		echo Installing Claude Code CLI...
++		call npm install -g @anthropic-ai/claude-code
++	)
++) else (
++	echo Claude Code CLI is already installed.
++)
+ 
+ echo.
+ echo Done. Restart LabsCode so it sees the new tools.
+ pause
++exit /b 0
++
++:ensure
++%~1 >nul 2>&1
++if errorlevel 1 (
++	echo Installing %~3...
++	choco install %~2 -y --no-progress
++) else (
++	echo %~3 is already installed.
++)
++exit /b 0
+diff --git a/lite/labscode.bat b/lite/labscode.bat
+index 5150e11..670875c 100644
+--- a/lite/labscode.bat
++++ b/lite/labscode.bat
+@@ -1,3 +1,3 @@
+ @echo off
+-rem Starts LabsCode Lite from this folder. Settings and extensions stay in LabsCode\data (portable).
++rem Starts LabsCode (Lite or full) from this folder. Settings and extensions stay in LabsCode\data (portable).
+ start "" "%~dp0LabsCode\LabsCode.exe" %*
+diff --git a/lite/labscode.sh b/lite/labscode.sh
+index 9e1dcc4..3a27619 100644
+--- a/lite/labscode.sh
++++ b/lite/labscode.sh
+@@ -1,4 +1,4 @@
+ #!/bin/sh
+-# Starts LabsCode Lite from this folder. Settings and extensions stay in LabsCode/data (portable).
++# Starts LabsCode (Lite or full) from this folder. Settings and extensions stay in LabsCode/data (portable).
+ DIR="$(cd "$(dirname "$0")" && pwd)"
+ exec "$DIR/LabsCode/code-oss" "$@" >/dev/null 2>&1 &

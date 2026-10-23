@@ -1,0 +1,17 @@
+{
+  "name": "omnitool-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OmniTool desktop edition: the shared tool catalog plus native tools, LabsCode and Omni Agent.",
+  "main": "main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "koffi": "3.3.2"
+  },
+  "devDependencies": {
+    "electron": "44.6.0"
+  }
+}

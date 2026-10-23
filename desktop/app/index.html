@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-edition="desktop">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="light dark">
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self' https: http://127.0.0.1:* http://localhost:*; frame-src 'self' blob: data: about:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+	<title>OmniTool</title>
+	<link rel="stylesheet" href="../../shared/fonts/fonts.css">
+	<link rel="stylesheet" href="../../shared/themes/tokens.css">
+	<link rel="stylesheet" href="../../shared/themes/app.css">
+	<script>
+		// Apply the saved theme before the first paint so dark mode never flashes light.
+		try {
+			var t = window.omniNative && window.omniNative.config.load().theme;
+			if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+		} catch (e) {}
+	</script>
+</head>
+<body>
+	<p class="muted" style="padding:24px" role="status">Loading OmniTool</p>
+	<script src="../../shared/manifest.js"></script>
+	<script src="../../shared/loader.js"></script>
+</body>
+</html>

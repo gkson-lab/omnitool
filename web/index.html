@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-edition="web">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="color-scheme" content="light dark">
+	<meta name="description" content="OmniTool web edition: 133 developer and everyday tools with a built-in assistant, running entirely in your browser.">
+	<title>OmniTool</title>
+	<link rel="stylesheet" href="../shared/fonts/fonts.css">
+	<link rel="stylesheet" href="../shared/themes/tokens.css">
+	<link rel="stylesheet" href="../shared/themes/app.css">
+	<script>
+		// Apply the saved theme before the first paint so dark mode never flashes light.
+		try {
+			var t = JSON.parse(localStorage.getItem('omnitool:theme'));
+			if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+		} catch (e) {}
+	</script>
+</head>
+<body>
+	<noscript><p style="padding:24px">OmniTool needs JavaScript turned on.</p></noscript>
+	<p class="muted" style="padding:24px" role="status">Loading OmniTool</p>
+	<script src="../shared/manifest.js"></script>
+	<script src="../shared/loader.js"></script>
+</body>
+</html>

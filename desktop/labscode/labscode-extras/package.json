@@ -1,0 +1,80 @@
+{
+  "name": "labscode-extras",
+  "displayName": "LabsCode Extras",
+  "description": "LabsCode Light and Dark themes, a focus timer, today's edit tally, a scratchpad and red-pen TODO markers.",
+  "version": "1.0.2",
+  "publisher": "gklabs",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Themes",
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "themes": [
+      {
+        "id": "LabsCode Light",
+        "label": "LabsCode Light",
+        "uiTheme": "vs",
+        "path": "./themes/labscode-light.json"
+      },
+      {
+        "id": "LabsCode Dark",
+        "label": "LabsCode Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/labscode-dark.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "labscode.focus.toggle",
+        "title": "Start or Stop Focus Timer",
+        "category": "LabsCode"
+      },
+      {
+        "command": "labscode.scratchpad.open",
+        "title": "Open Scratchpad",
+        "category": "LabsCode"
+      },
+      {
+        "command": "labscode.tally.reset",
+        "title": "Reset Today's Edit Tally",
+        "category": "LabsCode"
+      }
+    ],
+    "configuration": {
+      "title": "LabsCode",
+      "properties": {
+        "labscode.focus.minutes": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 240,
+          "description": "Length of a focus session started from the status bar, in minutes."
+        },
+        "labscode.tally.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show lines added and removed today in the status bar."
+        },
+        "labscode.redPen.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show TODO, FIXME and HACK markers in bold light red."
+        }
+      }
+    }
+  }
+}

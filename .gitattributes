@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.woff2 binary
+*.png binary
+# The fork patch carries CRLF lines for the .bat files it changes; converting them would break it.
+*.patch -text

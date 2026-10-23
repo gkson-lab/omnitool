@@ -1,0 +1,23 @@
+{
+  "name": "omnitool-bridge",
+  "displayName": "OmniTool Bridge",
+  "description": "Lets Omni Agent in OmniTool read the open file and apply edits you approve in OmniTool. Off unless LabsCode was started by OmniTool.",
+  "version": "1.0.1",
+  "publisher": "gklabs",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "omnitool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OmniTool by gklabs: 150 developer and everyday tools in a desktop and a web edition, with Omni Agent.",
+  "type": "commonjs",
+  "license": "MIT",
+  "scripts": {
+    "test:web": "node tests/selftest.js web",
+    "test:desktop": "node tests/selftest.js desktop"
+  }
+}
