@@ -1,4 +1,4 @@
-# OmniTool
+# OmniTool - developed by gksonlabs
 
 **150 developer and everyday tools in one window**, with the full LabsCode editor built in and an AI assistant, Omni Agent, that can run the tools for you.
 
