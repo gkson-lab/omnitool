@@ -1,5 +1,40 @@
+diff --git a/.github/workflows/lite-build.yml b/.github/workflows/lite-build.yml
+index 98cdfdcb..81c1c4af 100644
+--- a/.github/workflows/lite-build.yml
++++ b/.github/workflows/lite-build.yml
+@@ -99,17 +99,29 @@ jobs:
+           if [ "$RUNNER_OS" = "Windows" ]; then cp lite/install-deps.bat dist/; fi
+           chmod +x dist/*.sh 2>/dev/null || true
+ 
++      # Claude Code is published as one build per platform. /latest without a platform returns
++      # the Linux build, which the Windows zip then shipped ("the installed extension holds the
++      # Linux build instead"), so ask for this leg's target and check what came back.
+       - name: Bundle Claude Code extension (from Open VSX)
+         shell: bash
++        env:
++          TARGET: ${{ matrix.target }}
+         run: |
+           set -e
+-          url=$(curl -fsSL https://open-vsx.org/api/anthropic/claude-code/latest | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).files.download))")
++          url=$(curl -fsSL "https://open-vsx.org/api/anthropic/claude-code/$TARGET/latest" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);if(j.targetPlatform!==process.env.TARGET){console.error('Open VSX returned the '+j.targetPlatform+' build of Claude Code, not '+process.env.TARGET);process.exit(1)}console.log(j.files.download)})")
+           curl -fsSL "$url" -o claude-code.vsix
+           if [ "$RUNNER_OS" = "Windows" ]; then
+             ./dist/LabsCode/bin/code-oss.cmd --install-extension claude-code.vsix --extensions-dir dist/LabsCode/data/extensions
+           else
+             ./dist/LabsCode/bin/code-oss --install-extension claude-code.vsix --extensions-dir dist/LabsCode/data/extensions
+           fi
++          # The installed folder is named anthropic.claude-code-<version>-<platform>.
++          ls dist/LabsCode/data/extensions
++          if ls dist/LabsCode/data/extensions | grep '^anthropic\.claude-code-' | grep -qv -- "-$TARGET\$"; then
++            echo "Claude Code for a platform other than $TARGET ended up in the package" >&2
++            exit 1
++          fi
++          ls dist/LabsCode/data/extensions | grep -q -- "^anthropic\.claude-code-.*-$TARGET\$"
+ 
+       - name: Zip
+         shell: bash
 diff --git a/extensions/labscode-extras/extension.js b/extensions/labscode-extras/extension.js
-index 0451d55..4d38bf3 100644
+index 0451d554..4d38bf3b 100644
 --- a/extensions/labscode-extras/extension.js
 +++ b/extensions/labscode-extras/extension.js
 @@ -9,14 +9,17 @@ function focusTimer(context) {
@@ -158,7 +193,7 @@ index 0451d55..4d38bf3 100644
  		vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('labscode.redPen') && paintVisible()),
  	);
 diff --git a/extensions/labscode-extras/package.json b/extensions/labscode-extras/package.json
-index fe773f3..d3dda90 100644
+index fe773f37..d3dda90c 100644
 --- a/extensions/labscode-extras/package.json
 +++ b/extensions/labscode-extras/package.json
 @@ -2,7 +2,7 @@
@@ -180,7 +215,7 @@ index fe773f3..d3dda90 100644
        }
      }
 diff --git a/extensions/labscode-extras/themes/labscode-dark.json b/extensions/labscode-extras/themes/labscode-dark.json
-index 1a92cd9..fec6b81 100644
+index 1a92cd98..fec6b815 100644
 --- a/extensions/labscode-extras/themes/labscode-dark.json
 +++ b/extensions/labscode-extras/themes/labscode-dark.json
 @@ -15,7 +15,7 @@
@@ -202,7 +237,7 @@ index 1a92cd9..fec6b81 100644
  		"statusBar.foreground": "#8C8C8C",
  		"statusBar.noFolderBackground": "#090909",
 diff --git a/extensions/labscode-extras/themes/labscode-light.json b/extensions/labscode-extras/themes/labscode-light.json
-index 9a165be..2b3864d 100644
+index 9a165beb..2b3864dd 100644
 --- a/extensions/labscode-extras/themes/labscode-light.json
 +++ b/extensions/labscode-extras/themes/labscode-light.json
 @@ -8,8 +8,8 @@
@@ -246,7 +281,7 @@ index 9a165be..2b3864d 100644
  		"disabledForeground": "#BBBBBB",
  		"button.secondaryBorder": "#EAEAEA",
 diff --git a/lite/install-deps.bat b/lite/install-deps.bat
-index 95d8cb4..b45870f 100644
+index 95d8cb46..b45870f7 100644
 --- a/lite/install-deps.bat
 +++ b/lite/install-deps.bat
 @@ -1,10 +1,13 @@
@@ -312,7 +347,7 @@ index 95d8cb4..b45870f 100644
 +)
 +exit /b 0
 diff --git a/lite/labscode.bat b/lite/labscode.bat
-index 5150e11..670875c 100644
+index 5150e119..670875cf 100644
 --- a/lite/labscode.bat
 +++ b/lite/labscode.bat
 @@ -1,3 +1,3 @@
@@ -321,7 +356,7 @@ index 5150e11..670875c 100644
 +rem Starts LabsCode (Lite or full) from this folder. Settings and extensions stay in LabsCode\data (portable).
  start "" "%~dp0LabsCode\LabsCode.exe" %*
 diff --git a/lite/labscode.sh b/lite/labscode.sh
-index 9e1dcc4..3a27619 100644
+index 9e1dcc40..3a276190 100644
 --- a/lite/labscode.sh
 +++ b/lite/labscode.sh
 @@ -1,4 +1,4 @@
